@@ -1,5 +1,5 @@
-from multiprocessing.managers import EventProxy  # type: ignore [attr-defined]
 from queue import Queue
+from threading import Event
 from typing import Any, Callable, Optional, Union, Type
 from uuid import uuid4
 
@@ -10,6 +10,7 @@ from pydantic import (
     NonNegativeInt,
     PositiveFloat,
     PositiveInt,
+    SkipValidation,
 )
 
 AnyCallableType = Callable[..., Any]
@@ -35,13 +36,17 @@ class MessageState(BaseModel):
     Internal state maintained by Eventide for message processing.
 
     Attributes:
-        retry_count (int): The number of times this message has been retried.
+        buffer: Queue[Any]: The internal buffer this message was initially pulled into.
+        retry_count (NonNegativeInt): The number of times this message has been retried.
         retry_for_handlers (Set[str]): Set of handler names that need to be retried.
-        next_retry_time (Optional[float]): Timestamp for when this message should be retried.
-        last_exception (Optional[str]): String representation of the last exception that occurred.
+        next_retry_time (Optional[float]): Timestamp for when this message should be
+            retried.
+        last_exception (Optional[str]): String representation of the last exception
+            that occurred.
     """
 
-    retry_count: int = 0
+    buffer: SkipValidation[Queue[Any]]
+    retry_count: NonNegativeInt = 0
     retry_for_handlers: set[str] = Field(default_factory=set)
     next_retry_time: Optional[float] = None
     last_exception: Optional[str] = None
@@ -59,7 +64,7 @@ class Message(BaseModel):
 
     id: str
     body: StrAnyDictType
-    state: MessageState = Field(default_factory=MessageState)
+    state: MessageState
 
 
 HandlerMatcherType = Callable[[Message], bool]
@@ -94,7 +99,6 @@ class RetryConfig(BaseModel):
         retry_min_backoff (PositiveFloat): Minimum backoff time in seconds.
         retry_max_backoff (PositiveFloat): Maximum backoff time in seconds.
         retry_backoff_multiplier (PositiveFloat): Multiplier for exponential backoff.
-        retry_jitter (float): Random jitter factor (0.0-1.0) to add to backoff times.
         retry_limit (NonNegativeInt): Maximum number of retry attempts.
     """
 
@@ -103,7 +107,6 @@ class RetryConfig(BaseModel):
     retry_min_backoff: PositiveFloat = 1.0
     retry_max_backoff: PositiveFloat = 60.0
     retry_backoff_multiplier: PositiveFloat = 2.0
-    retry_jitter: float = Field(0.1, ge=0.0, le=1.0)
     retry_limit: NonNegativeInt = 3
 
 
@@ -130,18 +133,22 @@ class SyncData(BaseModel):
 
     Attributes:
         shutdown (Event): The event used to signal the shutdown of the application.
-        buffer_pairs (list[tuple[Queue[Any], Queue[Any]]]): The pairs of queues used to
-            communicate between the queues and workers. The first queue of the pair
-            contains the messages pending handling and the second one contains the
-            messages pending acknowledgement.
-        retry_buffer (Queue[Any]): A queue containing messages that need to be retried.
+        message_buffers (list[Queue[Any]]): The local buffers where messages from each
+            of the queues are stored.
+        ack_buffers (list[Queue[Any]]): The local buffers where messages that have been
+            handled and are ready to be acknowledged are stored.
+        retry_buffer (Queue[Any]): A local buffer containing messages that need to be
+            retried.
         handlers (set[tuple[HandlerMatcherType, AnyCallableType]]): The set of all the
             handler matchers and handler function pairs.
     """
 
-    shutdown: EventProxy
-    buffer_pairs: list[tuple[Queue[Any], Queue[Any]]]
-    retry_buffer: Queue[Any]
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    shutdown: SkipValidation[Event]
+    message_buffers: list[SkipValidation[Queue[Any]]]
+    ack_buffers: list[SkipValidation[Queue[Any]]]
+    retry_buffer: SkipValidation[Queue[Any]]
     handlers: set[tuple[HandlerMatcherType, AnyCallableType]]
 
 

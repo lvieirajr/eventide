@@ -45,7 +45,8 @@ class Eventide:
             cls._sync_manager = Manager()
             cls._sync_data = SyncData(
                 shutdown=cls._sync_manager.Event(),
-                buffer_pairs=[],
+                message_buffers=[],
+                ack_buffers=[],
                 retry_buffer=cls._sync_manager.Queue(),
                 handlers=set(),
             )
@@ -119,10 +120,12 @@ class Eventide:
         self._queues = []
 
         for queue_config in self._config.queues:
-            self._sync_data.buffer_pairs.append((
+            self._sync_data.message_buffers.append(
                 self._sync_manager.Queue(maxsize=queue_config.size),
-                self._sync_manager.Queue(),
-            ))
+            )
+            self._sync_data.ack_buffers.append(
+                self._sync_manager.Queue(maxsize=queue_config.size),
+            )
 
             queue = Queue.factory(config=queue_config, sync_data=self._sync_data)
 

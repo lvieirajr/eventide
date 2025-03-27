@@ -5,7 +5,7 @@ from sys import maxsize
 from pydantic import NonNegativeInt
 
 from .queue import Queue
-from .._types import Message, QueueConfig
+from .._types import Message, MessageState, QueueConfig
 
 
 class MockMessage(Message):
@@ -59,6 +59,7 @@ class MockQueue(Queue[MockMessage]):
                 MockMessage(
                     id=str(randint(1, maxsize)),
                     body={"value": "".join(choices(printable, k=randint(0, 10)))},
+                    state=MessageState(buffer=self.buffer),
                 ),
             )
 

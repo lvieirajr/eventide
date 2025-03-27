@@ -5,7 +5,7 @@ from typing import Optional, cast
 from pydantic import Field, PositiveInt
 
 from .queue import Queue
-from .._types import Message, QueueConfig, StrAnyDictType, SyncData
+from .._types import Message, MessageState, QueueConfig, StrAnyDictType, SyncData
 
 
 class CloudflareMessage(Message):
@@ -90,6 +90,7 @@ class CloudflareQueue(Queue[CloudflareMessage]):
                     metadata=cast(StrAnyDictType, message.metadata or {}),
                     timestamp_ms=message.timestamp_ms,
                     attempts=message.attempts,
+                    state=MessageState(buffer=self.buffer),
                 )
             )
 

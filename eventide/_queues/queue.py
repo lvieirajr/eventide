@@ -31,8 +31,8 @@ class Queue(Generic[TMessage], ABC):
 
         self._current_poll_interval = self._config.min_poll_interval
 
-        self.buffer = self._sync_data.buffer_pairs[-1][0]
-        self.ack_buffer = self._sync_data.buffer_pairs[-1][1]
+        self.buffer = self._sync_data.message_buffers[-1]
+        self.ack_buffer = self._sync_data.ack_buffers[-1]
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}(name='{self._config.name}')"

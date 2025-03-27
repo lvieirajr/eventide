@@ -40,7 +40,7 @@ class Worker:
             extra={**self._config.model_dump(logging=True)},
         )
 
-        for message_buffer, ack_buffer in cycle(self._sync_data.buffer_pairs):
+        for index, message_buffer in cycle(enumerate(self._sync_data.message_buffers)):
             if self._sync_data.shutdown.is_set():
                 break
 
@@ -50,7 +50,10 @@ class Worker:
                 sleep(0.1)
                 continue
 
-            self._handle_message(message=message, ack_buffer=ack_buffer)
+            self._handle_message(
+                message=message,
+                ack_buffer=self._sync_data.ack_buffers[index],
+            )
 
         self._logger.info(
             f"{self} stopped",
