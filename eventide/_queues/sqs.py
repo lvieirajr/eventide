@@ -4,7 +4,7 @@ from sys import maxsize
 from pydantic import NonNegativeInt, PositiveInt
 
 from .queue import Queue
-from .._types import Message, MessageState, QueueConfig, StrAnyDictType, SyncData
+from .._types import Message, MessageMetadata, QueueConfig, StrAnyDictType, SyncData
 
 
 class SQSMessage(Message):
@@ -67,7 +67,7 @@ class SQSQueue(Queue[SQSMessage]):
     def pull_messages(self) -> int:
         max_messages = min(
             self._config.max_number_of_messages,
-            (self._config.size or maxsize) - self.buffer.qsize(),
+            (self._config.size or maxsize) - self.message_queue.qsize(),
         )
 
         response = self._sqs_client.receive_message(
@@ -92,7 +92,11 @@ class SQSQueue(Queue[SQSMessage]):
                     receipt_handle=message["ReceiptHandle"],
                     attributes=message["Attributes"],
                     message_attributes=message["MessageAttributes"],
-                    state=MessageState(buffer=self.buffer),
+                    eventide_metadata=MessageMetadata(
+                        message_queue=self.message_queue,
+                        ack_queue=self.ack_queue,
+                        retry_dict=self.retry_dict,
+                    ),
                 ),
             )
 

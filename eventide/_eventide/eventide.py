@@ -45,9 +45,9 @@ class Eventide:
             cls._sync_manager = Manager()
             cls._sync_data = SyncData(
                 shutdown=cls._sync_manager.Event(),
-                message_buffers=[],
-                ack_buffers=[],
-                retry_buffer=cls._sync_manager.Queue(),
+                message_queues=[],
+                ack_queues=[],
+                retry_dicts=[],
                 handlers=set(),
             )
 
@@ -73,15 +73,8 @@ class Eventide:
         self._spawn_workers()
 
         while True:
-            queues_alive = workers_alive = False
-
-            for live_queue in self._queues:
-                if live_queue.thread.is_alive():
-                    queues_alive = True
-
-            for live_worker in self._workers:
-                if live_worker.process.is_alive():
-                    workers_alive = True
+            queues_alive = self._evaluate_queues()
+            workers_alive = self._evaluate_workers()
 
             if self._sync_data.shutdown.is_set() and not (
                 queues_alive or workers_alive
@@ -120,12 +113,11 @@ class Eventide:
         self._queues = []
 
         for queue_config in self._config.queues:
-            self._sync_data.message_buffers.append(
+            self._sync_data.message_queues.append(
                 self._sync_manager.Queue(maxsize=queue_config.size),
             )
-            self._sync_data.ack_buffers.append(
-                self._sync_manager.Queue(maxsize=queue_config.size),
-            )
+            self._sync_data.ack_queues.append(self._sync_manager.Queue())
+            self._sync_data.retry_dicts.append(self._sync_manager.dict())
 
             queue = Queue.factory(config=queue_config, sync_data=self._sync_data)
 
@@ -155,3 +147,21 @@ class Eventide:
             self._workers.append(
                 RunningWorker(process=process, config=worker_config),
             )
+
+    def _evaluate_queues(self) -> bool:
+        any_queues_running = False
+
+        for queue in self._queues:
+            if queue.thread.is_alive():
+                any_queues_running = True
+
+        return any_queues_running
+
+    def _evaluate_workers(self) -> bool:
+        any_workers_running = False
+
+        for worker in self._workers:
+            if worker.process.is_alive():
+                any_workers_running = True
+
+        return any_workers_running

@@ -5,7 +5,7 @@ from typing import Optional, cast
 from pydantic import Field, PositiveInt
 
 from .queue import Queue
-from .._types import Message, MessageState, QueueConfig, StrAnyDictType, SyncData
+from .._types import Message, MessageMetadata, QueueConfig, StrAnyDictType, SyncData
 
 
 class CloudflareMessage(Message):
@@ -67,7 +67,7 @@ class CloudflareQueue(Queue[CloudflareMessage]):
     def pull_messages(self) -> int:
         max_messages = min(
             self._config.batch_size,
-            (self._config.size or maxsize) - self.buffer.qsize(),
+            (self._config.size or maxsize) - self.message_queue.qsize(),
         )
 
         messages = self._cloudflare_client.queues.messages.pull(
@@ -90,7 +90,11 @@ class CloudflareQueue(Queue[CloudflareMessage]):
                     metadata=cast(StrAnyDictType, message.metadata or {}),
                     timestamp_ms=message.timestamp_ms,
                     attempts=message.attempts,
-                    state=MessageState(buffer=self.buffer),
+                    eventide_metadata=MessageMetadata(
+                        message_queue=self.message_queue,
+                        ack_queue=self.ack_queue,
+                        retry_dict=self.retry_dict,
+                    ),
                 )
             )
 

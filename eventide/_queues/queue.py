@@ -1,9 +1,10 @@
 from abc import ABC, abstractmethod
+from datetime import datetime, timezone
 from logging import Logger
 from queue import Empty
 from threading import Thread
 from time import sleep
-from typing import Any, Callable, Generic, TypeVar
+from typing import Any, Callable, Generic, Optional, TypeVar
 
 from .._types import BaseModel, Message, QueueConfig, SyncData
 from .._utils.logging import get_logger
@@ -23,16 +24,13 @@ class Queue(Generic[TMessage], ABC):
     _config: QueueConfig
     _sync_data: SyncData
 
-    _current_poll_interval: float
-
     def __init__(self, config: QueueConfig, sync_data: SyncData) -> None:
         self._config = config
         self._sync_data = sync_data
 
-        self._current_poll_interval = self._config.min_poll_interval
-
-        self.buffer = self._sync_data.message_buffers[-1]
-        self.ack_buffer = self._sync_data.ack_buffers[-1]
+        self.message_queue = self._sync_data.message_queues[-1]
+        self.ack_queue = self._sync_data.ack_queues[-1]
+        self.retry_dict = self._sync_data.retry_dicts[-1]
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}(name='{self._config.name}')"
@@ -79,8 +77,19 @@ class Queue(Generic[TMessage], ABC):
     def _logger(self) -> Logger:
         return get_logger(name=f"{type(self).__name__}.{self._config.name}")
 
-    def put(self, message: TMessage) -> None:
-        self.buffer.put(message, block=True)
+    def put(
+        self,
+        message: TMessage,
+        block: bool = True,
+        timeout: Optional[float] = None,
+    ) -> None:
+        self.message_queue.put(message, block=block, timeout=timeout)
+
+    def ack(self, message: TMessage) -> None:
+        self.ack_queue.put(message)
+
+    def retry(self, message: TMessage) -> None:
+        self.retry_dict[message.id] = message
 
     def run(self) -> None:
         self._logger.info(
@@ -89,39 +98,40 @@ class Queue(Generic[TMessage], ABC):
         )
 
         while not self._sync_data.shutdown.is_set():
-            messages_pulled = (
-                self.pull_messages() if self.buffer.qsize() < self._config.size else -1
-            )
-            self._process_ack_buffer()
+            self._process_ack_queue()
+            self._process_retry_dict()
 
-            sleep(self._current_poll_interval)
+            if self.message_queue.qsize() < self._config.size:
+                self.pull_messages()
 
-            if messages_pulled == 0:
-                self._current_poll_interval = min(
-                    self._current_poll_interval * 2,
-                    self._config.max_poll_interval,
-                )
-            elif messages_pulled > 0:
-                self._current_poll_interval = self._config.min_poll_interval
+            sleep(1)
 
         self._logger.info(
             f"{self} stopped",
             extra={**self._config.model_dump(logging=True)},
         )
 
-    def _process_ack_buffer(self) -> int:
+    def _process_ack_queue(self) -> None:
         acked_messages = []
 
         while True:
             try:
-                acked_messages.append(self.ack_buffer.get_nowait())
+                acked_messages.append(self.ack_queue.get_nowait())
             except Empty:
                 break
 
         if acked_messages:
             self.ack_messages(messages=acked_messages)
 
-        return len(acked_messages)
+    def _process_retry_dict(self) -> None:
+        now = datetime.now(tz=timezone.utc)
+
+        for message_id, message in list(self.retry_dict.items()):
+            if (
+                self.message_queue.qsize() < self._config.size
+                and message.eventide_metadata.next_retry < now
+            ):
+                self.put(self.retry_dict.pop(message_id))
 
 
 class RunningQueue(BaseModel):

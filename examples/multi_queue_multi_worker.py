@@ -1,6 +1,12 @@
 import logging
 
-from eventide import Eventide, EventideConfig, MockQueueConfig, WorkerConfig
+from eventide import (
+    Eventide,
+    EventideConfig,
+    MockQueueConfig,
+    RetryConfig,
+    WorkerConfig,
+)
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
@@ -14,9 +20,13 @@ if __name__ == "__main__":
                 MockQueueConfig(name="queue_3", size=20),
             ],
             workers=[
-                WorkerConfig(name="worker_1", timeout=10.0),
-                WorkerConfig(name="worker_2", timeout=10.0),
-                WorkerConfig(name="worker_3", timeout=10.0),
+                WorkerConfig(
+                    name="worker_1",
+                    timeout=1.0,
+                    retry_config=RetryConfig(retry_on_timeout=True),
+                ),
+                WorkerConfig(name="worker_2", timeout=1.0),
+                WorkerConfig(name="worker_3", timeout=1.0),
             ],
         ),
     ).run()

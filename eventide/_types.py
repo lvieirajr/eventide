@@ -1,5 +1,9 @@
+from datetime import datetime
+from multiprocessing.managers import (  # type: ignore [attr-defined]
+    DictProxy,
+    EventProxy,
+)
 from queue import Queue
-from threading import Event
 from typing import Any, Callable, Optional, Union, Type
 from uuid import uuid4
 
@@ -31,25 +35,28 @@ class BaseModel(PydanticBaseModel):
         return dump
 
 
-class MessageState(BaseModel):
+class MessageMetadata(BaseModel):
     """
     Internal state maintained by Eventide for message processing.
 
     Attributes:
-        buffer: Queue[Any]: The internal buffer this message was initially pulled into.
+        message_queue: Queue[Any]: The internal queue this message was initially pulled
+            into.
+        ack_queue: Queue[Any]: The internal queue where this message is stored after
+            being handled so it can be acknowledged.
+        retry_dict: DictProxy[str, Any]: A dictionary with message id and message as key
+            value pairs to be retried at some point in the future.
         retry_count (NonNegativeInt): The number of times this message has been retried.
-        retry_for_handlers (Set[str]): Set of handler names that need to be retried.
-        next_retry_time (Optional[float]): Timestamp for when this message should be
-            retried.
-        last_exception (Optional[str]): String representation of the last exception
-            that occurred.
+        failed_handlers (Set[str]): Set of handler names that need to be retried.
+        next_retry (Optional[datetime]): Time for the next retry to be enqueued.
     """
 
-    buffer: SkipValidation[Queue[Any]]
+    message_queue: SkipValidation[Queue[Any]]
+    ack_queue: SkipValidation[Queue[Any]]
+    retry_dict: DictProxy[str, Any]
     retry_count: NonNegativeInt = 0
-    retry_for_handlers: set[str] = Field(default_factory=set)
-    next_retry_time: Optional[float] = None
-    last_exception: Optional[str] = None
+    failed_handlers: set[str] = Field(default_factory=set)
+    next_retry: Optional[datetime] = None
 
 
 class Message(BaseModel):
@@ -59,12 +66,18 @@ class Message(BaseModel):
     Attributes:
         id (str): The unique identifier of the message.
         body (StrAnyDictType): The body of the message.
-        state (MessageState): Internal state maintained by Eventide.
+        eventide_metadata (MessageMetadata): Internal metadata maintained by Eventide.
     """
 
     id: str
     body: StrAnyDictType
-    state: MessageState
+    eventide_metadata: MessageMetadata
+
+    def ack(self) -> None:
+        self.eventide_metadata.ack_queue.put(self)
+
+    def retry(self) -> None:
+        self.eventide_metadata.retry_dict[self.id] = self
 
 
 HandlerMatcherType = Callable[[Message], bool]
@@ -77,15 +90,11 @@ class QueueConfig(BaseModel):
 
     Attributes:
         name (str): The name of the queue.
-        size (NonNegativeInt): The maximum size of the internal queue buffer.
-        min_poll_interval (PositiveFloat): The minimum time to wait between polls.
-        max_poll_interval (PositiveFloat): The maximum time to wait between polls.
+        size (NonNegativeInt): The maximum size of the internal queue.
     """
 
     name: str = Field(default_factory=lambda: uuid4().hex[:8])
     size: NonNegativeInt = 0
-    min_poll_interval: PositiveFloat = 1.0
-    max_poll_interval: PositiveFloat = 10.0
 
 
 class RetryConfig(BaseModel):
@@ -132,23 +141,23 @@ class SyncData(BaseModel):
     threads.
 
     Attributes:
-        shutdown (Event): The event used to signal the shutdown of the application.
-        message_buffers (list[Queue[Any]]): The local buffers where messages from each
-            of the queues are stored.
-        ack_buffers (list[Queue[Any]]): The local buffers where messages that have been
+        shutdown (EventProxy): The event used to signal the shutdown of the application.
+        message_queues (list[Queue[Any]]): The internal queues where messages pulled
+            from each of the external queues are stored.
+        ack_queues (list[Queue[Any]]): The internal queues where messages that have been
             handled and are ready to be acknowledged are stored.
-        retry_buffer (Queue[Any]): A local buffer containing messages that need to be
-            retried.
+        retry_dicts (list[DictProxy[str, Any]]): The dictionaries containing messages
+            that need to be retried from each queue.
         handlers (set[tuple[HandlerMatcherType, AnyCallableType]]): The set of all the
             handler matchers and handler function pairs.
     """
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    shutdown: SkipValidation[Event]
-    message_buffers: list[SkipValidation[Queue[Any]]]
-    ack_buffers: list[SkipValidation[Queue[Any]]]
-    retry_buffer: SkipValidation[Queue[Any]]
+    shutdown: EventProxy
+    message_queues: list[SkipValidation[Queue[Any]]]
+    ack_queues: list[SkipValidation[Queue[Any]]]
+    retry_dicts: list[DictProxy[str, Any]]
     handlers: set[tuple[HandlerMatcherType, AnyCallableType]]
 
 
