@@ -14,7 +14,7 @@ if __name__ == "__main__":
                 MockQueueConfig(name="queue_3", size=20),
             ],
             workers=[
-                WorkerConfig(name="worker_1", timeout=10.0),
+                WorkerConfig(name="worker_1", timeout=1.0),
             ],
         ),
     ).run()

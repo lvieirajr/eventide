@@ -71,13 +71,17 @@ class Worker:
         elif isinstance(retry.retry, list):
             retry_exception_types = set(retry.retry)
 
-        handlers = {
-            f"{handler.__module__}.{handler.__name__}": Handler(
-                handler=handler,
-                message=message,
-            )
+        failed_handlers = message.eventide_metadata.failed_handlers
+        matched_handlers = {
+            f"{handler.__module__}.{handler.__name__}": handler
             for matcher, handler in self._sync_data.handlers
             if matcher(message)
+        }
+
+        handlers = {
+            handler_name: Handler(handler=handler, message=message)
+            for handler_name, handler in matched_handlers.items()
+            if not failed_handlers or handler_name in failed_handlers
         }
         for handler in handlers.values():
             handler.run()

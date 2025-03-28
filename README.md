@@ -344,7 +344,7 @@ This example demonstrates how to:
 
 ## Roadmap
 
-- [ ] Retries and dead-letter queues
+- [ ] DLQ
 - [ ] Cleanup and resource management
 - [ ] Health checks and monitoring
 - [ ] Queue partitioning between workers
