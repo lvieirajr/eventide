@@ -2,15 +2,17 @@ from importlib import import_module
 from pkgutil import walk_packages
 from pathlib import Path
 from sys import path
+from typing import Any, Callable
 
+from .._types import Message
 from .._utils.logging import get_logger
-from .._types import HandlerFuncType, HandlerMatcherType
+from .matcher import HandlerMatcher
 
-handler_registry: set[tuple[HandlerMatcherType, HandlerFuncType]] = set()
+handler_registry: set[tuple[HandlerMatcher, Callable[[Message], Any]]] = set()
 
 
 def discover_handlers(paths: set[str]) -> None:
-    logger = get_logger(name="Eventide.HandlerDiscovery")
+    logger = get_logger(name="eventide.handler.discovery")
 
     for raw_path in {"."}.union(paths):
         resolved_path = Path(raw_path).resolve()

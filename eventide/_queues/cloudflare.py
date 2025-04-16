@@ -5,20 +5,10 @@ from typing import Optional, cast
 from pydantic import Field, PositiveInt
 
 from .queue import Queue
-from .._types import Message, MessageMetadata, QueueConfig, StrAnyDictType, SyncData
+from .._types import InterProcessCommunication, Message, QueueConfig, StrAnyDictType
 
 
 class CloudflareMessage(Message):
-    """
-    A message from a Cloudflare queue.
-
-    Attributes:
-        lease_id (str): The lease ID of the message.
-        metadata (StrAnyDict): The metadata of the message.
-        timestamp_ms (Optional[float]): The timestamp of the message in milliseconds.
-        attempts (Optional[float]): The number of attempts made to process the message.
-    """
-
     lease_id: str
     metadata: StrAnyDictType
     timestamp_ms: Optional[float] = None
@@ -26,48 +16,37 @@ class CloudflareMessage(Message):
 
 
 class CloudflareQueueConfig(QueueConfig):
-    """
-    Configuration for a CloudflareQueue.
-
-    Attributes:
-        queue_id (str): The ID of the queue.
-        account_id (str): The ID of the account.
-        batch_size (PositiveInt): The maximum number of messages to pull at once.
-        visibility_timeout_ms (PositiveInt): The visibility timeout in milliseconds.
-
-    """
-
     queue_id: str
     account_id: str
     batch_size: PositiveInt = Field(10, le=100)
-    visibility_timeout_ms: PositiveInt = Field(30000, le=12 * 60 * 60 * 1000)  # 12h max
+    visibility_timeout_ms: PositiveInt = Field(30000, le=12 * 60 * 60 * 1000)
 
 
 @Queue.register(CloudflareQueueConfig)
 class CloudflareQueue(Queue[CloudflareMessage]):
-    """
-    Cloudflare queue implementation.
-    """
-
     _config: CloudflareQueueConfig
 
-    def __init__(self, config: CloudflareQueueConfig, sync_data: SyncData) -> None:
+    def __init__(
+        self,
+        config: CloudflareQueueConfig,
+        ipc: InterProcessCommunication,
+    ) -> None:
         try:
             from cloudflare import Cloudflare
         except ImportError:
             raise ImportError("Install cloudflare to use CloudflareQueue")
 
-        if not config.name:
-            config.name = self._config.queue_id
-
-        super().__init__(config=config, sync_data=sync_data)
+        super().__init__(config=config, ipc=ipc)
 
         self._cloudflare_client = Cloudflare()
 
     def pull_messages(self) -> int:
         max_messages = min(
             self._config.batch_size,
-            (self._config.size or maxsize) - self.message_queue.qsize(),
+            (
+                (self._config.max_buffer_size or maxsize)
+                - self._sync_data.message_queue.qsize()
+            ),
         )
 
         messages = self._cloudflare_client.queues.messages.pull(
@@ -90,11 +69,6 @@ class CloudflareQueue(Queue[CloudflareMessage]):
                     metadata=cast(StrAnyDictType, message.metadata or {}),
                     timestamp_ms=message.timestamp_ms,
                     attempts=message.attempts,
-                    eventide_metadata=MessageMetadata(
-                        message_queue=self.message_queue,
-                        ack_queue=self.ack_queue,
-                        retry_dict=self.retry_dict,
-                    ),
                 )
             )
 

@@ -1,73 +1,51 @@
 from json import loads
 from sys import maxsize
 
-from pydantic import NonNegativeInt, PositiveInt
+from pydantic import Field, NonNegativeInt, PositiveInt
 
 from .queue import Queue
-from .._types import Message, MessageMetadata, QueueConfig, StrAnyDictType, SyncData
+from .._types import InterProcessCommunication, Message, QueueConfig, StrAnyDictType
 
 
 class SQSMessage(Message):
-    """
-    A message from an SQS queue.
-
-    Attributes:
-        receipt_handle (str): The receipt handle of the message.
-        attributes (StrAnyDictType): The SQS system attributes of the message.
-        message_attributes (StrAnyDictType): The attributes of the message.
-    """
-
     receipt_handle: str
     attributes: StrAnyDictType
     message_attributes: StrAnyDictType
 
 
 class SQSQueueConfig(QueueConfig):
-    """
-    Configuration for an SQS queue.
-
-    Attributes:
-        url (str): The URL of the SQS queue.
-        region (str): The AWS region where the SQS queue is located.
-        visibility_timeout (PositiveInt): The visibility timeout for messages.
-        max_number_of_messages (PositiveInt): The maximum number of messages to pull at
-            a time.
-        wait_time_seconds (NonNegativeIn): The time to wait in between each message
-            pulling iteration (long polling).
-    """
-
     url: str
     region: str
-    visibility_timeout: PositiveInt = 30
-    max_number_of_messages: PositiveInt = 10
-    wait_time_seconds: NonNegativeInt = 20
+    visibility_timeout: PositiveInt = Field(30, le=12 * 60 * 60)
+    max_number_of_messages: PositiveInt = Field(10, le=10)
+    wait_time_seconds: NonNegativeInt = Field(20, le=20)
 
 
 @Queue.register(SQSQueueConfig)
 class SQSQueue(Queue[SQSMessage]):
-    """
-    SQS queue implementation.
-    """
-
     _config: SQSQueueConfig
 
-    def __init__(self, config: SQSQueueConfig, sync_data: SyncData) -> None:
+    def __init__(
+        self,
+        config: SQSQueueConfig,
+        ipc: InterProcessCommunication,
+    ) -> None:
         try:
             from boto3 import client
         except ImportError:
             raise ImportError("Install boto3 to use SQSQueue")
 
-        if not config.name:
-            config.name = config.url.split("/")[-1]
-
-        super().__init__(config=config, sync_data=sync_data)
+        super().__init__(config=config, ipc=ipc)
 
         self._sqs_client = client("sqs", region_name=self._config.region)
 
     def pull_messages(self) -> int:
         max_messages = min(
             self._config.max_number_of_messages,
-            (self._config.size or maxsize) - self.message_queue.qsize(),
+            (
+                (self._config.max_buffer_size or maxsize)
+                - self._sync_data.message_queue.qsize()
+            ),
         )
 
         response = self._sqs_client.receive_message(
@@ -92,11 +70,6 @@ class SQSQueue(Queue[SQSMessage]):
                     receipt_handle=message["ReceiptHandle"],
                     attributes=message["Attributes"],
                     message_attributes=message["MessageAttributes"],
-                    eventide_metadata=MessageMetadata(
-                        message_queue=self.message_queue,
-                        ack_queue=self.ack_queue,
-                        retry_dict=self.retry_dict,
-                    ),
                 ),
             )
 

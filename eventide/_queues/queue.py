@@ -1,57 +1,35 @@
 from abc import ABC, abstractmethod
-from datetime import datetime, timezone
+from functools import cached_property
 from logging import Logger
-from queue import Empty
-from threading import Thread
+from multiprocessing import Value
 from time import sleep
-from typing import Any, Callable, Generic, Optional, TypeVar
+from typing import Any, Callable, Generic, TypeVar
 
-from .._types import BaseModel, Message, QueueConfig, SyncData
+from .._types import Message, QueueConfig, InterProcessCommunication
 from .._utils.logging import get_logger
 
 TMessage = TypeVar("TMessage", bound=Message)
 
 
 class Queue(Generic[TMessage], ABC):
-    """
-    Base class for queue implementations.
-    This abstract class defines the interface that all queue implementations must
-    follow.
-    """
-
-    _registry: dict[type[QueueConfig], type["Queue[Any]"]] = {}
+    _queue_type_registry: dict[type[QueueConfig], type["Queue[Any]"]] = {}
 
     _config: QueueConfig
-    _sync_data: SyncData
+    _ipc: InterProcessCommunication
 
-    def __init__(self, config: QueueConfig, sync_data: SyncData) -> None:
+    def __init__(self, config: QueueConfig, ipc: InterProcessCommunication) -> None:
         self._config = config
-        self._sync_data = sync_data
+        self._ipc = ipc
+        self._size = Value("i", 0)
 
-        self.message_queue = self._sync_data.message_queues[-1]
-        self.ack_queue = self._sync_data.ack_queues[-1]
-        self.retry_dict = self._sync_data.retry_dicts[-1]
+    @cached_property
+    def _logger(self) -> Logger:
+        return get_logger(name="eventide.queue")
 
-    def __repr__(self) -> str:
-        return f"{type(self).__name__}(name='{self._config.name}')"
-
-    @abstractmethod
-    def pull_messages(self) -> int:
-        """
-        Pull messages from the external queue and put them into the internal queue.
-        This method should be implemented by subclasses to pull messages from
-        their specific queue implementation.
-        """
-        pass
-
-    @abstractmethod
-    def ack_messages(self, messages: list[TMessage]) -> None:
-        """
-        Acknowledge messages that have been processed.
-        This method should be implemented by subclasses to acknowledge messages
-        that have been processed.
-        """
-        pass
+    @property
+    def size(self) -> int:
+        with self._size.get_lock():
+            return self._size.value
 
     @classmethod
     def register(
@@ -59,92 +37,55 @@ class Queue(Generic[TMessage], ABC):
         queue_config_type: type[QueueConfig],
     ) -> Callable[[type["Queue[Any]"]], type["Queue[Any]"]]:
         def inner(queue_subclass: type[Queue[Any]]) -> type[Queue[Any]]:
-            cls._registry[queue_config_type] = queue_subclass
+            cls._queue_type_registry[queue_config_type] = queue_subclass
             return queue_subclass
 
         return inner
 
     @classmethod
-    def factory(cls, config: QueueConfig, sync_data: SyncData) -> "Queue[Any]":
-        queue_subclass = cls._registry.get(type(config))
+    def factory(
+        cls,
+        config: QueueConfig,
+        ipc: InterProcessCommunication,
+    ) -> "Queue[Any]":
+        queue_subclass = cls._queue_type_registry.get(type(config))
 
         if not queue_subclass:
-            raise ValueError(f"No queue implementation found for {type(config)}")
+            raise ValueError(
+                f"No queue implementation found for {type(config).__name__}",
+            )
 
-        return queue_subclass(config=config, sync_data=sync_data)
+        return queue_subclass(config=config, ipc=ipc)
 
-    @property
-    def _logger(self) -> Logger:
-        return get_logger(name=f"{type(self).__name__}.{self._config.name}")
-
-    def put(
-        self,
-        message: TMessage,
-        block: bool = True,
-        timeout: Optional[float] = None,
-    ) -> None:
-        self.message_queue.put(message, block=block, timeout=timeout)
-
-    def ack(self, message: TMessage) -> None:
-        self.ack_queue.put(message)
-
-    def retry(self, message: TMessage) -> None:
-        self.retry_dict[message.id] = message
-
-    def run(self) -> None:
-        self._logger.info(
-            f"{self} is starting...",
-            extra={**self._config.model_dump(logging=True)},
-        )
-
-        while not self._sync_data.shutdown.is_set():
-            self._process_ack_queue()
-            self._process_retry_dict()
-
-            if self.message_queue.qsize() < self._config.size:
-                self.pull_messages()
-
-            sleep(1)
-
-        self._logger.info(
-            f"{self} stopped",
-            extra={**self._config.model_dump(logging=True)},
-        )
-
-    def _process_ack_queue(self) -> None:
-        acked_messages = []
-
+    def put(self, message: TMessage) -> None:
         while True:
-            try:
-                acked_messages.append(self.ack_queue.get_nowait())
-            except Empty:
-                break
+            with self._size.get_lock():
+                if (
+                    not self._config.buffer_size
+                    or self._size.value < self._config.buffer_size
+                ):
+                    self._ipc.buffer.put(message)
+                    self._size.value += 1
+                    return
 
-        if acked_messages:
-            self.ack_messages(messages=acked_messages)
+            sleep(0.1)
 
-    def _process_retry_dict(self) -> None:
-        now = datetime.now(tz=timezone.utc)
+    def get(self) -> TMessage:
+        message = self._ipc.buffer.get_nowait()
 
-        for message_id, message in list(self.retry_dict.items()):
-            if (
-                self.message_queue.qsize() < self._config.size
-                and message.eventide_metadata.next_retry < now
-            ):
-                self.put(self.retry_dict.pop(message_id))
+        with self._size.get_lock():
+            self._size.value -= 1
 
+        return message
 
-class RunningQueue(BaseModel):
-    """
-    State of a running queue.
+    @abstractmethod
+    def pull_messages(self) -> list[TMessage]:
+        raise NotImplementedError
 
-    Attributes:
-        queue (Queue[Any]): The queue object.
-        thread (Thread): The thread running the queue.
-        config (QueueConfig): Configuration for the queue.
-    """
+    @abstractmethod
+    def ack_messages(self) -> None:
+        raise NotImplementedError
 
-    queue: Queue[Any]
-
-    thread: Thread
-    config: QueueConfig
+    @abstractmethod
+    def dlq_messages(self) -> None:
+        raise NotImplementedError

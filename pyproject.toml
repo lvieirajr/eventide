@@ -40,6 +40,7 @@ requires-python = ">=3.9,<3.14"
 dependencies = [
   "jmespath (>=1.0,<2.0)",
   "pydantic (>=2.0,<3.0)",
+  "typing-extensions (>=3.10,<5.0); python_version < '3.12'",
 ]
 
 [project.optional-dependencies]

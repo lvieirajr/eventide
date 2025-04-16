@@ -8,10 +8,6 @@ if TYPE_CHECKING:
 
 
 class HandlerMatcher:
-    """
-    Matcher is a callable class that will evaluate a set of matchers against a message.
-    """
-
     _matchers: list[ParsedResult]
     _operator: Literal["all", "any", "and", "or"]
 

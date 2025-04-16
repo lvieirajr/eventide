@@ -1,7 +1,7 @@
 from ._handlers import eventide_handler
 from ._eventide import Eventide, EventideConfig
 from ._queues import CloudflareQueueConfig, MockQueueConfig, SQSQueueConfig
-from ._types import Message, RetryConfig, WorkerConfig
+from ._types import Message
 
 __all__ = [
     "CloudflareQueueConfig",
@@ -9,9 +9,7 @@ __all__ = [
     "EventideConfig",
     "Message",
     "MockQueueConfig",
-    "RetryConfig",
     "SQSQueueConfig",
-    "WorkerConfig",
     "eventide_handler",
 ]
 

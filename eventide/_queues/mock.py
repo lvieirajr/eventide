@@ -1,47 +1,37 @@
+from functools import cached_property
+from logging import Logger
 from random import choices, randint
 from string import printable
 from sys import maxsize
 
-from pydantic import NonNegativeInt
+from pydantic import NonNegativeInt, PositiveInt
 
 from .queue import Queue
-from .._types import Message, MessageMetadata, QueueConfig
+from .._types import Message, QueueConfig
+from .._utils.logging import get_logger
 
 
 class MockMessage(Message):
-    """
-    A message from a Mock queue.
-    """
-
     pass
 
 
 class MockQueueConfig(QueueConfig):
-    """
-    Configuration for a mock queue.
-
-    Attributes:
-        min_messages (NonNegativeInt): Minimum number of messages to generate.
-        max_messages (NonNegativeInt): Maximum number of messages to generate.
-    """
-
     min_messages: NonNegativeInt = 0
-    max_messages: NonNegativeInt = 10
+    max_messages: PositiveInt = 10
 
 
 @Queue.register(MockQueueConfig)
 class MockQueue(Queue[MockMessage]):
-    """
-    Mocked queue implementation.
-    Continuously generates a random number of messages.
-    """
-
     _config: MockQueueConfig
 
-    def pull_messages(self) -> int:
+    @cached_property
+    def _logger(self) -> Logger:
+        return get_logger(name="mock", parent=super()._logger)
+
+    def pull_messages(self) -> list[MockMessage]:
         max_messages = min(
             self._config.max_messages,
-            (self._config.size or maxsize) - self.message_queue.qsize(),
+            (self._config.buffer_size or maxsize) - self.size,
         )
 
         messages = randint(
@@ -50,24 +40,20 @@ class MockQueue(Queue[MockMessage]):
         )
 
         self._logger.info(
-            f"Pulled {messages} messages from {self}",
-            extra={"queue": self._config.name, "messages": messages},
+            f"Pulled {messages} messages from {type(self).__name__}",
+            extra={"config": self._config, "messages": messages},
         )
 
-        for _ in range(messages):
-            self.put(
-                MockMessage(
-                    id=str(randint(1, maxsize)),
-                    body={"value": "".join(choices(printable, k=randint(0, 10)))},
-                    eventide_metadata=MessageMetadata(
-                        message_queue=self.message_queue,
-                        ack_queue=self.ack_queue,
-                        retry_dict=self.retry_dict,
-                    ),
-                ),
+        return [
+            MockMessage(
+                id=str(randint(1, maxsize)),
+                body={"value": "".join(choices(printable, k=randint(0, 10)))},
             )
+            for _ in range(messages)
+        ]
 
-        return messages
+    def ack_messages(self) -> None:
+        pass
 
-    def ack_messages(self, messages: list[MockMessage]) -> None:
+    def dlq_messages(self) -> None:
         pass

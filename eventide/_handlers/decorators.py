@@ -1,35 +1,32 @@
 from functools import wraps
-from typing import Any, Literal
+from typing import Any, Callable, Literal, Optional, Type
 
 from .matcher import HandlerMatcher
-from .._types import AnyCallableType, HandlerFuncType
+from .registry import handler_registry
+from .._types import Message
 
 
 def eventide_handler(
     *matchers: str,
     operator: Literal["all", "any", "and", "or"] = "all",
-) -> AnyCallableType:
-    """
-    Decorator to register a function as a message handler.
-
-    Parameters:
-        matchers (str): One or more JMESPath expressions that will be used to match the
-            message.
-        operator (Literal["all", "any", "and", "or"]): The operator to use
-            when evaluating the matchers. Defaults to "all".
-
-    Returns:
-        AnyCallableType: The decorated function.
-    """
-
-    def decorator(func: HandlerFuncType) -> AnyCallableType:
-        from .registry import handler_registry
-
+    timeout: Optional[float] = None,
+    retry_for: Optional[list[Type[Exception]]] = None,
+    retry_limit: Optional[int] = None,
+    retry_min_backoff: Optional[float] = None,
+    retry_max_backoff: Optional[float] = None,
+) -> Callable[..., Any]:
+    def decorator(func: Callable[[Message], Any]) -> Callable[..., Any]:
         @wraps(func)
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
-            return func(*args, **kwargs)
+        def wrapper(message: Message) -> Any:
+            return func(message)
 
         handler_registry.add((HandlerMatcher(*matchers, operator=operator), wrapper))
+
+        wrapper.timeout = timeout
+        wrapper.retry_for = retry_for
+        wrapper.retry_limit = retry_limit
+        wrapper.retry_min_backoff = retry_min_backoff
+        wrapper.retry_max_backoff = retry_max_backoff
 
         return wrapper
 
