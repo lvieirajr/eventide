@@ -11,7 +11,7 @@ from types import FrameType
 from typing import Optional
 
 from .._handlers import discover_handlers, handler_registry
-from .._types import EventideConfig, InterProcessCommunication, Message, WorkerState
+from .._types import EventideConfig, WorkerState
 from .._queues import Queue
 from .._workers import Worker
 from .._utils.logging import get_logger
@@ -25,10 +25,13 @@ set_start_method("fork", force=True)
 
 class Eventide:
     _config: EventideConfig
-    _ipc: InterProcessCommunication
+
     _queue: Queue
+
+    _shutdown: MultiprocessingEvent
+    _heartbeats: MultiprocessingQueue
+
     _workers: dict[int, WorkerState]
-    _retries: dict[str, Message]
 
     def __init__(self, config: EventideConfig) -> None:
         self._config = config
@@ -41,24 +44,22 @@ class Eventide:
         self._logger.info("Eventide starting...")
 
         self._discover_handlers()
-
         self._setup_signal_handlers()
-        self._setup_ipc()
 
-        self._queue = Queue.factory(config=self._config.queue, ipc=self._ipc)
+        self._shutdown = MultiprocessingEvent()
+        self._heartbeats = MultiprocessingQueue()
 
-        self._workers, self._retries = {}, {}
+        self._queue = Queue.factory(config=self._config.queue)
+
+        self._workers = {}
         for worker_id in range(1, self._config.concurrency + 1):
             self._spawn_worker(worker_id=worker_id)
 
-        while not self._ipc.shutdown.is_set():
+        while not self._shutdown.is_set():
             self._monitor_workers()
 
-            self._retry_messages()
-            self._pull_messages()
-
-            self._queue.ack_messages()
-            self._queue.dlq_messages()
+            self._queue.enqueue_retries()
+            self._queue.enqueue_messages()
 
             sleep(0.1)
 
@@ -101,11 +102,11 @@ class Eventide:
         def handle_signal(signum: int, _frame: Optional[FrameType]) -> None:
             signal_name = Signals(signum).name
 
-            if not self._ipc.shutdown.is_set():
+            if not self._shutdown.is_set():
                 self._logger.info(
                     f"{signal_name} received. Initiating graceful shutdown...",
                 )
-                self._ipc.shutdown.set()
+                self._shutdown.set()
                 return
 
             self._logger.warning(
@@ -116,22 +117,17 @@ class Eventide:
         signal(SIGINT, handle_signal)
         signal(SIGTERM, handle_signal)
 
-    def _setup_ipc(self) -> None:
-        self._ipc = InterProcessCommunication(
-            shutdown=MultiprocessingEvent(),
-            heartbeats=MultiprocessingQueue(),
-            buffer=MultiprocessingQueue(maxsize=self._config.queue.buffer_size),
-            retries=MultiprocessingQueue(),
-            acks=MultiprocessingQueue(),
-            dlq=MultiprocessingQueue(),
-        )
-
     def _spawn_worker(self, worker_id: int) -> None:
         def _worker_process() -> None:
             signal(SIGINT, SIG_IGN)
             signal(SIGTERM, SIG_IGN)
 
-            Worker(worker_id=worker_id, ipc=self._ipc, queue=self._queue).run()
+            Worker(
+                worker_id=worker_id,
+                queue=self._queue,
+                shutdown=self._shutdown,
+                heartbeats=self._heartbeats,
+            ).run()
 
         self._workers[worker_id] = WorkerState(
             worker_id=worker_id,
@@ -146,7 +142,7 @@ class Eventide:
 
         while True:
             try:
-                heartbeat = self._ipc.heartbeats.get_nowait()
+                heartbeat = self._heartbeats.get_nowait()
             except Empty:
                 break
 
@@ -185,7 +181,7 @@ class Eventide:
                     message.eventide_metadata.attempt = next_attempt
                     message.eventide_metadata.retry_at = time() + backoff
 
-                    self._ipc.retries[message.id] = message
+                    self._queue.retry_message(message)
 
                     self._logger.warning(
                         f"Retrying failed message {message.id} in {backoff:.2f}s",
@@ -197,40 +193,10 @@ class Eventide:
                         },
                     )
                 else:
-                    self._ipc.dlq.put(message)
+                    self._queue.dlq_message(message)
                     self._logger.warning(
                         f"Message {message.id} sent to the DLQ after exhausting all "
                         "available attempts"
                     )
             elif not self._workers[worker_id].process.is_alive():
                 self._spawn_worker(worker_id=worker_id)
-
-    def _retry_messages(self) -> None:
-        while True:
-            try:
-                message = self._ipc.retries.get_nowait()
-            except Empty:
-                break
-
-            self._retries[message.id] = message
-
-        now = time()
-        for message_id, message in list(self._retries.items()):
-            if now >= message.retry_info.retry_at:
-                if self._queue.size < self._config.queue.buffer_size:
-                    self._queue.put(self._retries.pop(message_id))
-
-    def _pull_messages(self) -> None:
-        for message in self._queue.pull_messages():
-            for matcher, handler in handler_registry:
-                if matcher(message):
-                    message.eventide_metadata.handler = handler
-                    self._queue.put(message)
-                    break
-
-            if not message.eventide_metadata.handler:
-                self._logger.warning(
-                    f"No handler found for message {message.id}. Sending to DLQ...",
-                    extra={"message_id": message.id},
-                )
-                self._ipc.dlq.put(message)

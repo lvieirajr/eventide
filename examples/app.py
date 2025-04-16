@@ -8,8 +8,9 @@ if __name__ == "__main__":
     app = Eventide(
         config=EventideConfig(
             handler_paths={"./examples"},
-            queue=MockQueueConfig(buffer_size=20),
-            concurrency=10,
+            queue=MockQueueConfig(buffer_size=1000),
+            concurrency=1,
+            timeout=1.0,
         ),
     )
     app.run()

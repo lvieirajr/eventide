@@ -1,33 +1,39 @@
 from logging import Logger
+from multiprocessing import Event as MultiprocessingEvent
+from multiprocessing import Queue as MultiprocessingQueue
 from queue import Empty
 from time import time
 
 from .._queues import Queue
 from .._utils.logging import get_logger
-from .._types import HeartBeat, InterProcessCommunication, Message
+from .._types import HeartBeat, Message
 
 
 class Worker:
     _worker_id: int
-    _ipc: InterProcessCommunication
+    _queue: Queue
+    _shutdown: MultiprocessingEvent
+    _heartbeats: MultiprocessingQueue
 
     def __init__(
         self,
         worker_id: int,
-        ipc: InterProcessCommunication,
         queue: Queue,
+        shutdown: MultiprocessingEvent,
+        heartbeats: MultiprocessingQueue,
     ) -> None:
         self._worker_id = worker_id
-        self._ipc = ipc
-        self.queue = queue
+        self._queue = queue
+        self._shutdown = shutdown
+        self._heartbeats = heartbeats
 
     @property
     def _logger(self) -> Logger:
         return get_logger(name=f"eventide.worker.{self._worker_id}")
 
     def run(self) -> None:
-        while not self._ipc.shutdown.is_set():
-            self._ipc.heartbeats.put(
+        while not self._shutdown.is_set():
+            self._heartbeats.put_nowait(
                 HeartBeat(
                     worker_id=self._worker_id,
                     timestamp=time(),
@@ -36,11 +42,11 @@ class Worker:
             )
 
             try:
-                message = self.queue.get()
+                message = self._queue.get_message()
             except Empty:
                 continue
 
-            self._ipc.heartbeats.put(
+            self._heartbeats.put(
                 HeartBeat(
                     worker_id=self._worker_id,
                     timestamp=time(),
@@ -77,14 +83,14 @@ class Worker:
                 message.eventide_metadata.attempt = next_attempt
                 message.eventide_metadata.retry_at = time() + backoff
 
-                self._ipc.retries[message.id] = message
+                self._queue.retry_message(message=message)
 
                 self._logger.warning(
                     f"Retrying failed message {message.id} in {backoff:.2f}s",
                     extra={**log_extra, "backoff": backoff, "reason": type(exception)},
                 )
             else:
-                self._ipc.dlq.put(message)
+                self._queue.dlq_message(message=message)
                 self._logger.warning(
                     f"Message {message.id} sent to the DLQ after exhausting all "
                     "available attempts"
@@ -92,4 +98,4 @@ class Worker:
 
             return
 
-        self._ipc.acks.put(message)
+        self._queue.ack_message(message=message)

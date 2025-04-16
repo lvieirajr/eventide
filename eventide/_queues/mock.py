@@ -29,19 +29,23 @@ class MockQueue(Queue[MockMessage]):
         return get_logger(name="mock", parent=super()._logger)
 
     def pull_messages(self) -> list[MockMessage]:
-        max_messages = min(
-            self._config.max_messages,
-            (self._config.buffer_size or maxsize) - self.size,
-        )
+        with self._size.get_lock():
+            max_messages = min(
+                self._config.max_messages,
+                (self._config.buffer_size or maxsize) - self._size.value,
+            )
 
-        messages = randint(
+        message_count = randint(
             min(self._config.min_messages, max_messages),
             max_messages,
         )
 
         self._logger.info(
-            f"Pulled {messages} messages from {type(self).__name__}",
-            extra={"config": self._config, "messages": messages},
+            f"Pulled {message_count} messages from Mock Queue",
+            extra={
+                "config": self._config.model_dump(logging=True),
+                "messages": message_count,
+            },
         )
 
         return [
@@ -49,11 +53,11 @@ class MockQueue(Queue[MockMessage]):
                 id=str(randint(1, maxsize)),
                 body={"value": "".join(choices(printable, k=randint(0, 10)))},
             )
-            for _ in range(messages)
+            for _ in range(message_count)
         ]
 
-    def ack_messages(self) -> None:
-        pass
+    def ack_message(self, message: MockMessage) -> None:
+        self._logger.debug(f"Acknowledged message {message.id}")
 
-    def dlq_messages(self) -> None:
-        pass
+    def dlq_message(self, message: MockMessage) -> None:
+        self._logger.debug(f"Sent message {message.id} to the DLQ")

@@ -1,11 +1,14 @@
 from abc import ABC, abstractmethod
 from functools import cached_property
 from logging import Logger
+from multiprocessing import Queue as MultiprocessingQueue
 from multiprocessing import Value
-from time import sleep
+from queue import Empty
+from time import time
 from typing import Any, Callable, Generic, TypeVar
 
-from .._types import Message, QueueConfig, InterProcessCommunication
+from .._handlers import handler_registry
+from .._types import Message, QueueConfig
 from .._utils.logging import get_logger
 
 TMessage = TypeVar("TMessage", bound=Message)
@@ -15,21 +18,14 @@ class Queue(Generic[TMessage], ABC):
     _queue_type_registry: dict[type[QueueConfig], type["Queue[Any]"]] = {}
 
     _config: QueueConfig
-    _ipc: InterProcessCommunication
 
-    def __init__(self, config: QueueConfig, ipc: InterProcessCommunication) -> None:
+    def __init__(self, config: QueueConfig) -> None:
         self._config = config
-        self._ipc = ipc
+
         self._size = Value("i", 0)
 
-    @cached_property
-    def _logger(self) -> Logger:
-        return get_logger(name="eventide.queue")
-
-    @property
-    def size(self) -> int:
-        with self._size.get_lock():
-            return self._size.value
+        self._message_buffer = MultiprocessingQueue(maxsize=self._config.buffer_size)
+        self._retry_buffer = MultiprocessingQueue()
 
     @classmethod
     def register(
@@ -43,11 +39,7 @@ class Queue(Generic[TMessage], ABC):
         return inner
 
     @classmethod
-    def factory(
-        cls,
-        config: QueueConfig,
-        ipc: InterProcessCommunication,
-    ) -> "Queue[Any]":
+    def factory(cls, config: QueueConfig) -> "Queue[Any]":
         queue_subclass = cls._queue_type_registry.get(type(config))
 
         if not queue_subclass:
@@ -55,37 +47,73 @@ class Queue(Generic[TMessage], ABC):
                 f"No queue implementation found for {type(config).__name__}",
             )
 
-        return queue_subclass(config=config, ipc=ipc)
+        return queue_subclass(config=config)
 
-    def put(self, message: TMessage) -> None:
-        while True:
-            with self._size.get_lock():
-                if (
-                    not self._config.buffer_size
-                    or self._size.value < self._config.buffer_size
-                ):
-                    self._ipc.buffer.put(message)
-                    self._size.value += 1
-                    return
+    @cached_property
+    def _logger(self) -> Logger:
+        return get_logger(name="eventide.queue")
 
-            sleep(0.1)
-
-    def get(self) -> TMessage:
-        message = self._ipc.buffer.get_nowait()
+    def get_message(self) -> TMessage:
+        message = self._message_buffer.get(timeout=0.1)
 
         with self._size.get_lock():
             self._size.value -= 1
 
         return message
 
+    def retry_message(self, message: TMessage) -> None:
+        self._retry_buffer.put_nowait(message)
+
+    def enqueue_retries(self) -> None:
+        messages_to_retry = []
+
+        while True:
+            try:
+                messages_to_retry.append(self._retry_buffer.get_nowait())
+            except Empty:
+                break
+
+        now = time()
+        for message in messages_to_retry:
+            if message.eventide_metadata.retry_at <= now:
+                with self._size.get_lock():
+                    if (
+                        self._config.buffer_size == 0
+                        or self._size.value < self._config.buffer_size
+                    ):
+                        self._message_buffer.put_nowait(message)
+                        self._size.value += 1
+                    else:
+                        self.retry_message(message)
+            else:
+                self.retry_message(message)
+
+    def enqueue_messages(self) -> None:
+        for message in self.pull_messages():
+            for matcher, handler in handler_registry:
+                if matcher(message):
+                    message.eventide_metadata.handler = handler
+
+                    with self._size.get_lock():
+                        self._message_buffer.put_nowait(message)
+                        self._size.value += 1
+                        break
+
+            if not message.eventide_metadata.handler:
+                self._logger.warning(
+                    f"No handler found for message {message.id}. Sending to DLQ...",
+                    extra={"message_id": message.id},
+                )
+                self.dlq_message(message)
+
     @abstractmethod
     def pull_messages(self) -> list[TMessage]:
         raise NotImplementedError
 
     @abstractmethod
-    def ack_messages(self) -> None:
+    def ack_message(self, message: TMessage) -> None:
         raise NotImplementedError
 
     @abstractmethod
-    def dlq_messages(self) -> None:
+    def dlq_message(self, message: TMessage) -> None:
         raise NotImplementedError

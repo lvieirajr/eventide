@@ -1,7 +1,5 @@
 from logging import INFO
 from multiprocessing import Process
-from multiprocessing.managers import EventProxy  # type: ignore [attr-defined]
-from queue import Queue
 from sys import maxsize
 from typing import Any, Callable, Literal, Optional, Type
 
@@ -12,7 +10,6 @@ from pydantic import (
     NonNegativeInt,
     PositiveFloat,
     PositiveInt,
-    SkipValidation,
 )
 
 StrAnyDictType = dict[str, Any]
@@ -60,17 +57,6 @@ class WorkerState(BaseModel):
     process: Process
     heartbeat: Optional[float] = None
     message: Optional[Message] = None
-
-
-class InterProcessCommunication(BaseModel):
-    shutdown: SkipValidation[EventProxy]
-
-    heartbeats: SkipValidation[Queue[HeartBeat]]
-
-    buffer: SkipValidation[Queue[Message]]
-    acks: SkipValidation[Queue[Message]]
-    retries: SkipValidation[Queue[Message]]
-    dlq: SkipValidation[Queue[Message]]
 
 
 class EventideConfig(BaseModel):
