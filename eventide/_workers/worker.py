@@ -71,13 +71,13 @@ class Worker:
         except Exception as exception:
             next_attempt = message.eventide_metadata.attempt + 1
 
-            if next_attempt <= handler.retry_limit and any(
+            if next_attempt <= (handler.retry_limit + 1) and any(
                 isinstance(exception, exception_type)
                 for exception_type in handler.retry_for
             ):
                 backoff = min(
                     handler.retry_max_backoff,
-                    handler.retry_min_backoff * (next_attempt**2.0),
+                    handler.retry_min_backoff * 2 ** (next_attempt - 2),
                 )
 
                 message.eventide_metadata.attempt = next_attempt

@@ -51,7 +51,7 @@ class MockQueue(Queue[MockMessage]):
         return [
             MockMessage(
                 id=str(randint(1, maxsize)),
-                body={"value": "".join(choices(printable, k=randint(0, 10)))},
+                body={"value": "".join(choices(printable, k=randint(0, 9)))},
             )
             for _ in range(message_count)
         ]

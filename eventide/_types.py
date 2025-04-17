@@ -1,6 +1,5 @@
 from logging import INFO
-from multiprocessing import Process
-from sys import maxsize
+from multiprocessing.context import ForkProcess
 from typing import Any, Callable, Literal, Optional, Type
 
 from pydantic import (
@@ -31,8 +30,8 @@ class BaseModel(PydanticBaseModel):
 
 class MessageMetadata(BaseModel):
     handler: Optional[Callable[..., Any]] = None
-    attempt: NonNegativeInt = 0
-    retry_at: float = maxsize
+    attempt: PositiveInt = 1
+    retry_at: Optional[float] = None
 
 
 class Message(BaseModel):
@@ -54,7 +53,7 @@ class HeartBeat(BaseModel):
 
 class WorkerState(BaseModel):
     worker_id: int
-    process: Process
+    process: ForkProcess
     heartbeat: Optional[float] = None
     message: Optional[Message] = None
 

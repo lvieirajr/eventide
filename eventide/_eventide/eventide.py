@@ -1,8 +1,9 @@
 from functools import cached_property
 from logging import Logger
+from multiprocessing.context import ForkContext
 from multiprocessing import Event as MultiprocessingEvent
 from multiprocessing import Queue as MultiprocessingQueue
-from multiprocessing import Process, set_start_method
+from multiprocessing import get_context
 from os import _exit
 from queue import Empty
 from signal import SIGINT, SIGTERM, SIG_IGN, Signals, signal
@@ -16,18 +17,13 @@ from .._queues import Queue
 from .._workers import Worker
 from .._utils.logging import get_logger
 
-import faulthandler
-
-faulthandler.enable()
-
-set_start_method("fork", force=True)
-
 
 class Eventide:
     _config: EventideConfig
 
     _queue: Queue
 
+    _context: ForkContext
     _shutdown: MultiprocessingEvent
     _heartbeats: MultiprocessingQueue
 
@@ -43,11 +39,13 @@ class Eventide:
     def run(self) -> None:
         self._logger.info("Eventide starting...")
 
+        self._context = get_context("fork")
+
         self._discover_handlers()
         self._setup_signal_handlers()
 
-        self._shutdown = MultiprocessingEvent()
-        self._heartbeats = MultiprocessingQueue()
+        self._shutdown = self._context.Event()
+        self._heartbeats = self._context.Queue()
 
         self._queue = Queue.factory(config=self._config.queue)
 
@@ -58,8 +56,11 @@ class Eventide:
         while not self._shutdown.is_set():
             self._monitor_workers()
 
-            self._queue.enqueue_retries()
-            self._queue.enqueue_messages()
+            if not self._queue.full:
+                self._queue.enqueue_retries()
+
+            if not self._queue.full:
+                self._queue.enqueue_messages()
 
             sleep(0.1)
 
@@ -76,7 +77,7 @@ class Eventide:
                 if handler.timeout is None:
                     handler.timeout = self._config.timeout
                 else:
-                    handler.timeout = min(handler.timeout, 0.001)
+                    handler.timeout = max(handler.timeout, 0.001)
 
                 if handler.retry_for is None:
                     handler.retry_for = set(self._config.retry_for)
@@ -86,7 +87,7 @@ class Eventide:
                 if handler.retry_limit is None:
                     handler.retry_limit = self._config.retry_limit
                 else:
-                    handler.retry_limit = min(handler.retry_limit, 0)
+                    handler.retry_limit = max(handler.retry_limit, 0)
 
                 if handler.retry_min_backoff is None:
                     handler.retry_min_backoff = self._config.retry_min_backoff
@@ -131,7 +132,7 @@ class Eventide:
 
         self._workers[worker_id] = WorkerState(
             worker_id=worker_id,
-            process=Process(target=_worker_process, daemon=True),
+            process=self._context.Process(target=_worker_process, daemon=True),
             heartbeat=None,
             message=None,
         )
@@ -167,15 +168,17 @@ class Eventide:
                 next_attempt = message.eventide_metadata.attempt + 1
 
                 worker_state.process.terminate()
+                worker_state.process.kill()
+                worker_state.process.join(timeout=0.1)
                 self._spawn_worker(worker_id=worker_id)
 
-                if next_attempt <= handler.retry_limit and any(
-                    isinstance(exception_type, TimeoutError)
+                if next_attempt <= (handler.retry_limit + 1) and any(
+                    issubclass(exception_type, TimeoutError)
                     for exception_type in handler.retry_for
                 ):
                     backoff = min(
                         handler.retry_max_backoff,
-                        handler.retry_min_backoff * (next_attempt**2.0),
+                        handler.retry_min_backoff * 2 ** (next_attempt - 2),
                     )
 
                     message.eventide_metadata.attempt = next_attempt

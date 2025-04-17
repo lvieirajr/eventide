@@ -53,6 +53,16 @@ class Queue(Generic[TMessage], ABC):
     def _logger(self) -> Logger:
         return get_logger(name="eventide.queue")
 
+    @property
+    def size(self) -> int:
+        with self._size.get_lock():
+            return self._size.value
+
+    @property
+    def full(self) -> bool:
+        with self._size.get_lock():
+            return self._size.value == self._config.buffer_size
+
     def get_message(self) -> TMessage:
         message = self._message_buffer.get(timeout=0.1)
 
@@ -72,6 +82,11 @@ class Queue(Generic[TMessage], ABC):
                 messages_to_retry.append(self._retry_buffer.get_nowait())
             except Empty:
                 break
+
+        messages_to_retry = sorted(
+            messages_to_retry,
+            key=lambda m: m.eventide_metadata.retry_at,
+        )
 
         now = time()
         for message in messages_to_retry:
