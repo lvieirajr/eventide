@@ -54,7 +54,7 @@ class HeartBeat(BaseModel):
 class WorkerState(BaseModel):
     worker_id: int
     process: ForkProcess
-    heartbeat: Optional[float] = None
+    heartbeat: float
     message: Optional[Message] = None
 
 

@@ -1,7 +1,7 @@
 from functools import cached_property
 from logging import Logger
 from random import choices, randint
-from string import printable
+from string import ascii_letters, digits
 from sys import maxsize
 
 from pydantic import NonNegativeInt, PositiveInt
@@ -51,7 +51,9 @@ class MockQueue(Queue[MockMessage]):
         return [
             MockMessage(
                 id=str(randint(1, maxsize)),
-                body={"value": "".join(choices(printable, k=randint(0, 9)))},
+                body={
+                    "value": "".join(choices(ascii_letters + digits, k=randint(1, 10))),
+                },
             )
             for _ in range(message_count)
         ]

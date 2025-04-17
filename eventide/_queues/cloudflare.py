@@ -1,4 +1,5 @@
 from json import loads
+from multiprocessing.context import ForkContext
 from sys import maxsize
 from typing import Optional, cast
 
@@ -26,13 +27,13 @@ class CloudflareQueueConfig(QueueConfig):
 class CloudflareQueue(Queue[CloudflareMessage]):
     _config: CloudflareQueueConfig
 
-    def __init__(self, config: CloudflareQueueConfig) -> None:
+    def __init__(self, config: CloudflareQueueConfig, context: ForkContext) -> None:
         try:
             from cloudflare import Cloudflare
         except ImportError:
             raise ImportError("Install cloudflare to use CloudflareQueue")
 
-        super().__init__(config=config)
+        super().__init__(config=config, context=context)
 
         self._cloudflare_client = Cloudflare()
 

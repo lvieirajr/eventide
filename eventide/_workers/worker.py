@@ -1,8 +1,9 @@
 from logging import Logger
 from multiprocessing import Event as MultiprocessingEvent
 from multiprocessing import Queue as MultiprocessingQueue
-from queue import Empty
-from time import time
+from queue import Empty, ShutDown
+from time import sleep, time
+from typing import Optional
 
 from .._queues import Queue
 from .._utils.logging import get_logger
@@ -19,12 +20,12 @@ class Worker:
         self,
         worker_id: int,
         queue: Queue,
-        shutdown: MultiprocessingEvent,
+        shutdown_event: MultiprocessingEvent,
         heartbeats: MultiprocessingQueue,
     ) -> None:
         self._worker_id = worker_id
         self._queue = queue
-        self._shutdown = shutdown
+        self._shutdown_event = shutdown_event
         self._heartbeats = heartbeats
 
     @property
@@ -32,29 +33,16 @@ class Worker:
         return get_logger(name=f"eventide.worker.{self._worker_id}")
 
     def run(self) -> None:
-        while not self._shutdown.is_set():
-            self._heartbeats.put_nowait(
-                HeartBeat(
-                    worker_id=self._worker_id,
-                    timestamp=time(),
-                    message=None,
-                )
-            )
+        while not self._shutdown_event.is_set():
+            self._heartbeat(message=None)
 
-            try:
-                message = self._queue.get_message()
-            except Empty:
-                continue
-
-            self._heartbeats.put(
-                HeartBeat(
-                    worker_id=self._worker_id,
-                    timestamp=time(),
-                    message=message,
-                )
-            )
-
-            self._handle_message(message=message)
+            message = self._get_message()
+            if message:
+                self._heartbeat(message=message)
+                self._handle_message(message=message)
+                self._heartbeat(message=None)
+            else:
+                sleep(0.1)
 
     def _handle_message(self, message: Message) -> None:
         handler = message.eventide_metadata.handler
@@ -99,3 +87,17 @@ class Worker:
             return
 
         self._queue.ack_message(message=message)
+
+    def _get_message(self) -> Optional[Message]:
+        try:
+            return self._queue.get_message()
+        except (Empty, ShutDown):
+            return None
+
+    def _heartbeat(self, message: Optional[Message] = None) -> None:
+        try:
+            self._heartbeats.put_nowait(
+                HeartBeat(worker_id=self._worker_id, timestamp=time(), message=message)
+            )
+        except (Empty, ShutDown):
+            pass

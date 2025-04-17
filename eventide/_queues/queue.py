@@ -3,6 +3,7 @@ from functools import cached_property
 from logging import Logger
 from multiprocessing import Queue as MultiprocessingQueue
 from multiprocessing import Value
+from multiprocessing.context import ForkContext
 from queue import Empty
 from time import time
 from typing import Any, Callable, Generic, TypeVar
@@ -18,14 +19,21 @@ class Queue(Generic[TMessage], ABC):
     _queue_type_registry: dict[type[QueueConfig], type["Queue[Any]"]] = {}
 
     _config: QueueConfig
+    _context: ForkContext
 
-    def __init__(self, config: QueueConfig) -> None:
+    _message_buffer: MultiprocessingQueue
+    _retry_buffer: MultiprocessingQueue
+
+    _size: Value
+
+    def __init__(self, config: QueueConfig, context: ForkContext) -> None:
         self._config = config
+        self._context = context
 
-        self._size = Value("i", 0)
+        self._message_buffer = self._context.Queue(maxsize=self._config.buffer_size)
+        self._retry_buffer = self._context.Queue()
 
-        self._message_buffer = MultiprocessingQueue(maxsize=self._config.buffer_size)
-        self._retry_buffer = MultiprocessingQueue()
+        self._size = self._context.Value("i", 0)
 
     @classmethod
     def register(
@@ -39,7 +47,7 @@ class Queue(Generic[TMessage], ABC):
         return inner
 
     @classmethod
-    def factory(cls, config: QueueConfig) -> "Queue[Any]":
+    def factory(cls, config: QueueConfig, context: ForkContext) -> "Queue[Any]":
         queue_subclass = cls._queue_type_registry.get(type(config))
 
         if not queue_subclass:
@@ -47,7 +55,7 @@ class Queue(Generic[TMessage], ABC):
                 f"No queue implementation found for {type(config).__name__}",
             )
 
-        return queue_subclass(config=config)
+        return queue_subclass(config=config, context=context)
 
     @cached_property
     def _logger(self) -> Logger:
@@ -64,7 +72,7 @@ class Queue(Generic[TMessage], ABC):
             return self._size.value == self._config.buffer_size
 
     def get_message(self) -> TMessage:
-        message = self._message_buffer.get(timeout=0.1)
+        message = self._message_buffer.get_nowait()
 
         with self._size.get_lock():
             self._size.value -= 1
@@ -120,6 +128,13 @@ class Queue(Generic[TMessage], ABC):
                     extra={"message_id": message.id},
                 )
                 self.dlq_message(message)
+
+    def shutdown(self) -> None:
+        self._message_buffer.close()
+        self._message_buffer.cancel_join_thread()
+
+        self._retry_buffer.close()
+        self._retry_buffer.cancel_join_thread()
 
     @abstractmethod
     def pull_messages(self) -> list[TMessage]:

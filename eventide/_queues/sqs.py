@@ -1,6 +1,7 @@
 from functools import cached_property
 from logging import Logger
 from json import loads
+from multiprocessing.context import ForkContext
 from sys import maxsize
 
 from pydantic import Field, NonNegativeInt, PositiveInt
@@ -29,13 +30,13 @@ class SQSQueueConfig(QueueConfig):
 class SQSQueue(Queue[SQSMessage]):
     _config: SQSQueueConfig
 
-    def __init__(self, config: SQSQueueConfig) -> None:
+    def __init__(self, config: SQSQueueConfig, context: ForkContext) -> None:
         try:
             from boto3 import client
         except ImportError:
             raise ImportError("Install boto3 to use SQSQueue")
 
-        super().__init__(config=config)
+        super().__init__(config=config, context=context)
 
         self._sqs_client = client("sqs", region_name=self._config.region)
 
