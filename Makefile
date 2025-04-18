@@ -35,22 +35,22 @@ mise-setup: mise.toml  ##@Mise Sets up mise-en-place
 # UV
 # ======================================================================================
 .PHONY: lock
-lock: .bootstrapped-mise pyproject.toml ##@UV Locks the Python dependencies
+lock: pyproject.toml ##@UV Locks the Python dependencies
 	@echo "Locking Python dependencies..."
 	@uv lock --upgrade
 
 .PHONY: sync
-sync: .bootstrapped-mise pyproject.toml uv.lock ##@UV Installs the Python dependencies
+sync: pyproject.toml uv.lock ##@UV Installs the Python dependencies
 	@echo "Installing Python dependencies..."
 	@uv sync --all-extras --frozen --no-install-project
 
 .PHONY: build
-build: .bootstrapped-uv pyproject.toml uv.lock ##@UV Builds the package
+build: pyproject.toml uv.lock ##@UV Builds the package
 	@echo "Building the package..."
 	@uv build
 
 .PHONY: publish
-publish: .bootstrapped-uv pyproject.toml uv.lock ##@UV Publishes the package
+publish: pyproject.toml uv.lock ##@UV Publishes the package
 	@echo "Publishing the package..."
 	@uv publish
 
@@ -59,7 +59,7 @@ publish: .bootstrapped-uv pyproject.toml uv.lock ##@UV Publishes the package
 # Pre-commit
 # ======================================================================================
 .PHONY: pre-commit-install
-pre-commit-install: .bootstrapped-mise .pre-commit-config.yaml  ##@PreCommit Installs pre-commit hooks
+pre-commit-install: .pre-commit-config.yaml  ##@PreCommit Installs pre-commit hooks
 	@echo "Installing pre-commit hooks..."
 	@pre-commit install
 
