@@ -40,9 +40,6 @@ jobs:
           - "3.10"
           - "3.9"
     steps:
-      - uses: actions/checkout@v4
-      - uses: lvieirajr/eventide/.github/actions/uv@test-actions
+      - uses: lvieirajr/eventide/.github/actions/pytest@test-actions
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Pytest
-        run: pytest ./
