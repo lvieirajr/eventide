@@ -1,5 +1,5 @@
-name: "uv"
-description: "Set up uv and all the dependencies"
+name: ruff
+description: Check linting and formatting using Ruff
 
 runs:
   using: composite
