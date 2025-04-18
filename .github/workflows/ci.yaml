@@ -23,16 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
-        with:
-          python-version: 3.13
-          enable-cache: true
-          prune-cache: true
-          cache-dependency-glob: |
-            **/uv.lock
-            **/pyproject.toml
-      - name: Install dependencies
-        run: uv sync --all-extras --frozen --no-install-project
+      - uses: lvieirajr/eventide/.github/actions/uv@test-actions
       - name: Ruff linter
         run: ruff check --output-format=github ./
       - name: Ruff formatter
@@ -42,16 +33,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
-        with:
-          python-version: 3.13
-          enable-cache: true
-          prune-cache: true
-          cache-dependency-glob: |
-            **/uv.lock
-            **/pyproject.toml
-      - name: Install dependencies
-        run: uv sync --all-extras --frozen --no-install-project
+      - uses: lvieirajr/eventide/.github/actions/uv@test-actions
       - name: Mypy
         run: mypy ./
 
@@ -67,15 +49,8 @@ jobs:
           - "3.9"
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: lvieirajr/eventide/.github/actions/uv@test-actions
         with:
           python-version: ${{ matrix.python-version }}
-          enable-cache: true
-          prune-cache: true
-          cache-dependency-glob: |
-            **/uv.lock
-            **/pyproject.toml
-      - name: Install dependencies
-        run: uv sync --all-extras --frozen --no-install-project
       - name: Pytest
         run: pytest ./
