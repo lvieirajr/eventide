@@ -160,8 +160,6 @@ sqs = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "boto3" },
-    { name = "cloudflare" },
     { name = "ipdb" },
     { name = "mock" },
     { name = "mypy" },
@@ -183,8 +181,6 @@ provides-extras = ["cloudflare", "sqs"]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "boto3" },
-    { name = "cloudflare" },
     { name = "ipdb" },
     { name = "mock" },
     { name = "mypy" },

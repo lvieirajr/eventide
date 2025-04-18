@@ -42,7 +42,7 @@ lock: .bootstrapped-mise pyproject.toml ##@UV Locks the Python dependencies
 .PHONY: sync
 sync: .bootstrapped-mise pyproject.toml uv.lock ##@UV Installs the Python dependencies
 	@echo "Installing Python dependencies..."
-	@uv sync --frozen --no-install-project
+	@uv sync --all-extras --frozen --no-install-project
 
 .PHONY: build
 build: .bootstrapped-uv pyproject.toml uv.lock ##@UV Builds the package

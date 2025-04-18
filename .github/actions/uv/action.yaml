@@ -1,0 +1,14 @@
+name: "uv"
+description: "Set up uv on the environment"
+
+
+inputs:
+  python:
+    description: "Python version"
+    required: false
+    default: "3.11"
+
+
+runs:
+  using: composite
+  steps:

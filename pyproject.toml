@@ -52,8 +52,6 @@ sqs = [
 
 [dependency-groups]
 dev = [
-  "boto3",
-  "cloudflare",
   "ipdb",
   "mock",
   "mypy",
