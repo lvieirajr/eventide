@@ -34,9 +34,9 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-extras --frozen --no-install-project
       - name: Ruff linter
-        run: ruff check --output-format=github
+        run: ruff check --output-format=github ./
       - name: Ruff formatter
-        run: ruff format --check --diff
+        run: ruff format --check --diff ./
 
   mypy:
     runs-on: ubuntu-latest
@@ -53,7 +53,7 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-extras --frozen --no-install-project
       - name: Mypy
-        run: mypy --non-interactive --pretty ./
+        run: mypy ./
 
   pytest:
     runs-on: ubuntu-latest
@@ -78,4 +78,4 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-extras --frozen --no-install-project
       - name: Pytest
-        run: pytest
+        run: pytest ./
