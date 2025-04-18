@@ -22,12 +22,12 @@ jobs:
   ruff:
     runs-on: ubuntu-latest
     steps:
-      - uses: lvieirajr/eventide/.github/actions/ruff@test-actions
+      - uses: lvieirajr/eventide/.github/actions/ruff@main
 
   mypy:
     runs-on: ubuntu-latest
     steps:
-      - uses: lvieirajr/eventide/.github/actions/mypy@test-actions
+      - uses: lvieirajr/eventide/.github/actions/mypy@main
 
   pytest:
     runs-on: ubuntu-latest
@@ -40,6 +40,6 @@ jobs:
           - "3.10"
           - "3.9"
     steps:
-      - uses: lvieirajr/eventide/.github/actions/pytest@test-actions
+      - uses: lvieirajr/eventide/.github/actions/pytest@main
         with:
           python-version: ${{ matrix.python-version }}
