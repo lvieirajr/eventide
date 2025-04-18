@@ -1,14 +1,12 @@
-from functools import cached_property
-from logging import Logger
 from json import loads
 from multiprocessing.context import ForkContext
 from sys import maxsize
+from typing import Optional
 
 from pydantic import Field, NonNegativeInt, PositiveInt
 
-from .queue import Queue
-from .._types import Message, QueueConfig, StrAnyDictType
-from .._utils.logging import get_logger
+from .queue import Message, Queue, QueueConfig
+from .._types import StrAnyDictType
 
 
 class SQSMessage(Message):
@@ -20,7 +18,7 @@ class SQSMessage(Message):
 class SQSQueueConfig(QueueConfig):
     region: str
     url: str
-    dlq_url: str | None = None
+    dlq_url: Optional[str] = None
     visibility_timeout: PositiveInt = Field(30, le=12 * 60 * 60)
     max_number_of_messages: PositiveInt = Field(10, le=10)
     wait_time_seconds: NonNegativeInt = Field(20, le=20)
@@ -40,10 +38,6 @@ class SQSQueue(Queue[SQSMessage]):
 
         self._sqs_client = client("sqs", region_name=self._config.region)
 
-    @cached_property
-    def _logger(self) -> Logger:
-        return get_logger(name="sqs", parent=super()._logger)
-
     def pull_messages(self) -> list[SQSMessage]:
         with self._size.get_lock():
             max_messages = min(
@@ -58,15 +52,6 @@ class SQSQueue(Queue[SQSMessage]):
             VisibilityTimeout=self._config.visibility_timeout,
             MessageSystemAttributeNames=["All"],
         )
-        messages = response.get("Messages", [])
-
-        self._logger.info(
-            f"Pulled {len(messages)} messages from SQS Queue",
-            extra={
-                "config": self._config.model_dump(logging=True),
-                "messages": len(messages),
-            },
-        )
 
         return [
             SQSMessage(
@@ -76,7 +61,7 @@ class SQSQueue(Queue[SQSMessage]):
                 attributes=message["Attributes"],
                 message_attributes=message["MessageAttributes"],
             )
-            for message in messages
+            for message in response.get("Messages", [])
         ]
 
     def ack_message(self, message: SQSMessage) -> None:
@@ -86,18 +71,11 @@ class SQSQueue(Queue[SQSMessage]):
         )
 
     def dlq_message(self, message: SQSMessage) -> None:
-        if self._config.dlq_url:
-            self._sqs_client.send_message(
-                QueueUrl=self._config.dlq_url,
-                MessageBody=message.body,
-                MessageAttributes=message.message_attributes,
-            )
+        if not self._config.dlq_url:
             return
 
-        self._logger.warning(
-            "No DLQ configured",
-            extra={
-                "config": self._config.model_dump(logging=True),
-                "message": message.id,
-            },
+        self._sqs_client.send_message(
+            QueueUrl=self._config.dlq_url,
+            MessageBody=message.body,
+            MessageAttributes=message.message_attributes,
         )

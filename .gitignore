@@ -64,6 +64,7 @@ ehthumbs_vista.db
 ### END Others ###
 
 
+### START Eventide ###
 # Mise
 mise.local.toml
 
@@ -92,3 +93,4 @@ dist/
 
 # Bootstrap
 .bootstrapped-*
+### END Eventide ###

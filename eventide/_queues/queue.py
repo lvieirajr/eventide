@@ -1,18 +1,35 @@
 from abc import ABC, abstractmethod
 from functools import cached_property
-from logging import Logger
+from logging import Logger, getLogger
 from multiprocessing import Queue as MultiprocessingQueue
 from multiprocessing import Value
 from multiprocessing.context import ForkContext
 from queue import Empty
 from time import time
-from typing import Any, Callable, Generic, TypeVar
+from typing import Any, Callable, Generic, Optional, TypeVar
+
+from pydantic import Field, NonNegativeInt, PositiveInt
 
 from .._handlers import handler_registry
-from .._types import Message, QueueConfig
-from .._utils.logging import get_logger
+from .._types import BaseModel, StrAnyDictType
 
-TMessage = TypeVar("TMessage", bound=Message)
+TMessage = TypeVar("TMessage", bound="Message")
+
+
+class MessageMetadata(BaseModel):
+    handler: Optional[Callable[..., Any]] = None
+    attempt: PositiveInt = 1
+    retry_at: Optional[float] = None
+
+
+class Message(BaseModel):
+    id: str
+    body: StrAnyDictType
+    eventide_metadata: MessageMetadata = Field(default_factory=MessageMetadata)
+
+
+class QueueConfig(BaseModel):
+    buffer_size: NonNegativeInt = 0
 
 
 class Queue(Generic[TMessage], ABC):
@@ -34,6 +51,18 @@ class Queue(Generic[TMessage], ABC):
         self._retry_buffer = self._context.Queue()
 
         self._size = self._context.Value("i", 0)
+
+    @abstractmethod
+    def pull_messages(self) -> list[TMessage]:
+        raise NotImplementedError
+
+    @abstractmethod
+    def ack_message(self, message: TMessage) -> None:
+        raise NotImplementedError
+
+    @abstractmethod
+    def dlq_message(self, message: TMessage) -> None:
+        raise NotImplementedError
 
     @classmethod
     def register(
@@ -59,7 +88,7 @@ class Queue(Generic[TMessage], ABC):
 
     @cached_property
     def _logger(self) -> Logger:
-        return get_logger(name="eventide.queue")
+        return getLogger(name="eventide.queue")
 
     @property
     def size(self) -> int:
@@ -135,15 +164,3 @@ class Queue(Generic[TMessage], ABC):
 
         self._retry_buffer.close()
         self._retry_buffer.cancel_join_thread()
-
-    @abstractmethod
-    def pull_messages(self) -> list[TMessage]:
-        raise NotImplementedError
-
-    @abstractmethod
-    def ack_message(self, message: TMessage) -> None:
-        raise NotImplementedError
-
-    @abstractmethod
-    def dlq_message(self, message: TMessage) -> None:
-        raise NotImplementedError

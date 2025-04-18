@@ -5,8 +5,8 @@ from typing import Optional, cast
 
 from pydantic import Field, PositiveInt
 
-from .queue import Queue
-from .._types import Message, QueueConfig, StrAnyDictType
+from .queue import Message, Queue, QueueConfig
+from .._types import StrAnyDictType
 
 
 class CloudflareMessage(Message):
@@ -50,14 +50,6 @@ class CloudflareQueue(Queue[CloudflareMessage]):
             batch_size=max_messages,
         ).result
 
-        self._logger.info(
-            f"Pulled {len(messages)} messages from Cloudflare Queue",
-            extra={
-                "config": self._config.model_dump(logging=True),
-                "messages": len(messages),
-            },
-        )
-
         return [
             CloudflareMessage(
                 id=message.id or "",
@@ -78,4 +70,5 @@ class CloudflareQueue(Queue[CloudflareMessage]):
         )
 
     def dlq_message(self, message: CloudflareMessage) -> None:
+        # TODO: Implement DLQ for Cloudflare
         pass

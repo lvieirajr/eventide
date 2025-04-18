@@ -1,14 +1,12 @@
 from functools import cached_property
-from logging import Logger
+from logging import Logger, getLogger
 from random import choices, randint
 from string import ascii_letters, digits
 from sys import maxsize
 
 from pydantic import NonNegativeInt, PositiveInt
 
-from .queue import Queue
-from .._types import Message, QueueConfig
-from .._utils.logging import get_logger
+from .queue import Message, Queue, QueueConfig
 
 
 class MockMessage(Message):
@@ -26,7 +24,7 @@ class MockQueue(Queue[MockMessage]):
 
     @cached_property
     def _logger(self) -> Logger:
-        return get_logger(name="mock", parent=super()._logger)
+        return getLogger(name="eventide.queue.mock")
 
     def pull_messages(self) -> list[MockMessage]:
         with self._size.get_lock():
@@ -40,12 +38,9 @@ class MockQueue(Queue[MockMessage]):
             max_messages,
         )
 
-        self._logger.info(
+        self._logger.debug(
             f"Pulled {message_count} messages from Mock Queue",
-            extra={
-                "config": self._config.model_dump(logging=True),
-                "messages": message_count,
-            },
+            extra={"config": self._config.model_dump(), "messages": message_count},
         )
 
         return [

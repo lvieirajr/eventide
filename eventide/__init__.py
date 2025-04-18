@@ -1,7 +1,6 @@
 from ._handlers import eventide_handler
 from ._eventide import Eventide, EventideConfig
-from ._queues import CloudflareQueueConfig, MockQueueConfig, SQSQueueConfig
-from ._types import Message
+from ._queues import CloudflareQueueConfig, Message, MockQueueConfig, SQSQueueConfig
 
 __all__ = [
     "CloudflareQueueConfig",

@@ -100,7 +100,7 @@ mypy:  ##@Mypy Runs the MyPy static type checker on the project
 # ======================================================================================
 .PHONY: pytest
 pytest:  ##@Testing Runs the PyTest test suite
-	@echo "Running tests..."
+	@echo "Running pytest..."
 	@pytest ./
 
 

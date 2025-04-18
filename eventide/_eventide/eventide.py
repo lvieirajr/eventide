@@ -1,21 +1,28 @@
 from functools import cached_property
-from logging import Logger
-from multiprocessing.context import ForkContext
+from logging import Logger, getLogger
+from multiprocessing.context import ForkContext, ForkProcess
 from multiprocessing import Event as MultiprocessingEvent
 from multiprocessing import Queue as MultiprocessingQueue
 from multiprocessing import get_context
-from os import _exit
 from queue import Empty
-from signal import SIGINT, SIGTERM, SIG_IGN, Signals, signal
+from signal import SIGINT, SIGTERM, SIG_IGN, signal
+from sys import exit
 from time import sleep, time
 from types import FrameType
 from typing import Optional
 
+from .config import EventideConfig
 from .._handlers import discover_handlers, handler_registry
-from .._types import EventideConfig, WorkerState
-from .._queues import Queue
+from .._types import BaseModel
+from .._queues import Message, Queue
 from .._workers import Worker
-from .._utils.logging import get_logger
+
+
+class WorkerState(BaseModel):
+    worker_id: int
+    process: ForkProcess
+    heartbeat: float
+    message: Optional[Message] = None
 
 
 class Eventide:
@@ -32,10 +39,13 @@ class Eventide:
 
     @cached_property
     def _logger(self) -> Logger:
-        return get_logger(name="eventide")
+        return getLogger(name="eventide")
 
     def run(self) -> None:
-        self._logger.info("Eventide starting...")
+        self._logger.info(
+            "Starting Eventide...",
+            extra={"config": self._config.model_dump()},
+        )
 
         self._discover_handlers()
         self._setup_signal_handlers()
@@ -62,9 +72,12 @@ class Eventide:
 
             sleep(0.1)
 
-        self._logger.info("Eventide stopping...")
+        self._logger.info(
+            "Stopping Eventide...",
+            extra={"config": self._config.model_dump()},
+        )
 
-        self._shutdown()
+        self._shutdown(force=False)
 
     def _discover_handlers(self) -> None:
         discover_handlers(self._config.handler_paths)
@@ -97,20 +110,28 @@ class Eventide:
                     handler.retry_max_backoff = max(handler.retry_max_backoff, 0)
 
     def _setup_signal_handlers(self) -> None:
-        def handle_signal(signum: int, _frame: Optional[FrameType]) -> None:
-            signal_name = Signals(signum).name
-
+        def handle_signal(signum: int, frame: Optional[FrameType]) -> None:
             if not self._shutdown_event.is_set():
                 self._logger.info(
-                    f"{signal_name} received. Initiating graceful shutdown...",
+                    "Shutting down gracefully...",
+                    extra={
+                        "config": self._config.model_dump(),
+                        "signal": signum,
+                        "frame": frame,
+                    },
                 )
                 self._shutdown_event.set()
-                return
-
-            self._logger.warning(
-                f"{signal_name} received. Forcing immediate shutdown..."
-            )
-            _exit(1)
+            else:
+                self._logger.info(
+                    "Forcing immediate shutdown...",
+                    extra={
+                        "config": self._config.model_dump(),
+                        "signal": signum,
+                        "frame": frame,
+                    },
+                )
+                self._shutdown(force=True)
+                exit(1)
 
         signal(SIGINT, handle_signal)
         signal(SIGTERM, handle_signal)
@@ -181,31 +202,21 @@ class Eventide:
                         message.eventide_metadata.retry_at = time() + backoff
 
                         self._queue.retry_message(message)
-
-                        self._logger.warning(
-                            f"Retrying failed message {message.id} in {backoff:.2f}s",
-                            extra={
-                                "message_id": message.id,
-                                "attempt": next_attempt,
-                                "backoff": backoff,
-                                "reason": TimeoutError,
-                            },
-                        )
                     else:
                         self._queue.dlq_message(message)
-                        self._logger.warning(
-                            f"Message {message.id} sent to the DLQ after exhausting "
-                            "all available attempts"
-                        )
             elif not self._workers[worker_id].process.is_alive():
                 if self._shutdown_event.is_set():
                     self._kill_worker(worker_id=worker_id)
                 else:
                     self._spawn_worker(worker_id=worker_id)
 
-    def _shutdown(self) -> None:
-        while self._workers:
-            self._monitor_workers()
+    def _shutdown(self, force: bool = False) -> None:
+        if not force:
+            while self._workers:
+                self._monitor_workers()
+
+        for worker_id in list(self._workers.keys()):
+            self._kill_worker(worker_id=worker_id)
 
         self._heartbeats.close()
         self._heartbeats.cancel_join_thread()

@@ -1,10 +1,11 @@
 from typing import TYPE_CHECKING, Literal
+
 from jmespath import compile
 from jmespath.exceptions import ParseError
 from jmespath.parser import ParsedResult
 
 if TYPE_CHECKING:
-    from .._types import Message
+    from .._queues import Message
 
 
 class HandlerMatcher:

@@ -1,9 +1,11 @@
 from functools import wraps
-from typing import Any, Callable, Literal, Optional, Type
+from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, Type
 
 from .matcher import HandlerMatcher
 from .registry import handler_registry
-from .._types import Message
+
+if TYPE_CHECKING:
+    from .._queues import Message
 
 
 def eventide_handler(
@@ -15,9 +17,9 @@ def eventide_handler(
     retry_min_backoff: Optional[float] = None,
     retry_max_backoff: Optional[float] = None,
 ) -> Callable[..., Any]:
-    def decorator(func: Callable[[Message], Any]) -> Callable[..., Any]:
+    def decorator(func: Callable[["Message"], Any]) -> Callable[..., Any]:
         @wraps(func)
-        def wrapper(message: Message) -> Any:
+        def wrapper(message: "Message") -> Any:
             return func(message)
 
         wrapper.timeout = timeout
