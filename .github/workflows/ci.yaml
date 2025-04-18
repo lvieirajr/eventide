@@ -27,10 +27,7 @@ jobs:
   mypy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: lvieirajr/eventide/.github/actions/uv@test-actions
-      - name: Mypy
-        run: mypy ./
+      - uses: lvieirajr/eventide/.github/actions/mypy@test-actions
 
   pytest:
     runs-on: ubuntu-latest
