@@ -6,9 +6,6 @@ runs:
   steps:
     - uses: actions/checkout@v4
     - uses: lvieirajr/eventide/.github/actions/uv@test-actions
-    - name: Ruff linter
-      run: ruff check --output-format=github ./
-      shell: bash
-    - name: Ruff formatter
-      run: ruff format --check --diff ./
+    - name: Ruff
+      run: make ruff
       shell: bash
