@@ -53,7 +53,7 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-extras --frozen --no-install-project
       - name: Mypy
-        run: mypy --non-interactive --pretty
+        run: mypy --non-interactive --pretty ./
 
   pytest:
     runs-on: ubuntu-latest
