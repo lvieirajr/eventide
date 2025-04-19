@@ -1,0 +1,3 @@
+[env]
+UV_PUBLISH_TOKEN = ""
+UV_PUBLISH_TOKEN_TEST = ""

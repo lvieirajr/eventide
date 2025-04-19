@@ -1,0 +1,48 @@
+name: ci
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  id-token: write
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  UV_COMPILE_BYTECODE: true
+
+jobs:
+  ruff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: lvieirajr/eventide/.github/actions/ruff@main
+
+  mypy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: lvieirajr/eventide/.github/actions/mypy@main
+
+  pytest:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version:
+          - "3.13"
+          - "3.12"
+          - "3.11"
+          - "3.10"
+          - "3.9"
+    steps:
+      - uses: lvieirajr/eventide/.github/actions/pytest@main
+        with:
+          python-version: ${{ matrix.python-version }}

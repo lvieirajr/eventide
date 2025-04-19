@@ -1,0 +1,11 @@
+[tools]
+uv = "latest"
+
+[env]
+UV_COMPILE_BYTECODE = true
+
+[settings]
+auto_install = true
+experimental = true
+pipx.uvx = true
+python.uv_venv_auto = true

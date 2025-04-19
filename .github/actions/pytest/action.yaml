@@ -1,0 +1,18 @@
+name: pytest
+description: Run Pytest tests
+
+inputs:
+  python-version:
+    description: Python version
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@v4
+    - uses: lvieirajr/eventide/.github/actions/uv@main
+      with:
+        python-version: ${{ inputs.python-version }}
+    - name: Pytest
+      run: make pytest
+      shell: bash

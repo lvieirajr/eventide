@@ -1,0 +1,96 @@
+### START Mac OS ###
+*.icloud
+._*
+.AppleDB
+.AppleDesktop
+.AppleDouble
+.DocumentRevisions-V100
+.DS_Store
+.LSOverride
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.apdisk
+.com.apple.timemachine.donotpresent
+.fseventsd
+Network Trash Folder
+Temporary Items
+### END Mac OS ###
+
+
+### START Linux ###
+*~
+.directory
+.fuse_hidden*
+.nfs*
+.Trash-*
+### END Linux ###
+
+
+### START Windows ###
+*.cab
+*.lnk
+*.msi
+*.msix
+*.msm
+*.msp
+*.stackdump
+$RECYCLE.BIN/
+[Dd]esktop.ini
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+### END Windows ###
+
+
+### START Others ###
+# Backups / Logs / Temporary files
+*.bak
+*.log
+*.swp
+*.tmp
+
+# IDEs
+.idea/
+*.project
+*.tmproj
+*.vscode
+.devcontainer
+
+# Environment
+.env
+### END Others ###
+
+
+### START Eventide ###
+# Mise
+mise.local.toml
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.python-version
+
+# Mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# PyTest
+.pytest_cache/
+
+# Ruff
+.ruff_cache/
+
+# Coverage
+.coverage*
+
+# Build
+dist/
+
+# Bootstrap
+.bootstrapped-*
+### END Eventide ###

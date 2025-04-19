@@ -1,0 +1,11 @@
+name: ruff
+description: Check linting and formatting using Ruff
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@v4
+    - uses: lvieirajr/eventide/.github/actions/uv@main
+    - name: Ruff
+      run: make ruff
+      shell: bash

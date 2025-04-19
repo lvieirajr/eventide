@@ -1,0 +1,11 @@
+name: mypy
+description: Check typing using Mypy
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@v4
+    - uses: lvieirajr/eventide/.github/actions/uv@main
+    - name: Mypy
+      run: make mypy
+      shell: bash
