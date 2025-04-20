@@ -142,7 +142,7 @@ wheels = [
 
 [[package]]
 name = "eventide"
-version = "0.0.0a2"
+version = "0.0.0a3"
 source = { editable = "." }
 dependencies = [
     { name = "jmespath" },
