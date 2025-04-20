@@ -69,8 +69,8 @@ class Worker:
                 f"Message {message.id} handling succeeded in {end - start}s",
                 extra={
                     "message_id": message.id,
-                    "attempt": message.eventide_metadata.attempt,
                     "handler": handler.name,
+                    "attempt": message.eventide_metadata.attempt,
                     "duration": end - start,
                 },
             )

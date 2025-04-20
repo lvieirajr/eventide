@@ -11,6 +11,7 @@ handler_registry: set[Handler] = set()
 
 def discover_handlers(paths: list[str]) -> None:
     handler_registry.clear()
+
     for raw_path in set(paths) or {"."}:
         resolved_path = Path(raw_path).resolve()
 

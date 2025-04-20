@@ -5,10 +5,11 @@ from multiprocessing.synchronize import Event as MultiprocessingEvent
 from queue import Empty
 from signal import SIG_IGN, SIGINT, SIGTERM, signal
 from sys import exit as sys_exit
-from time import time
+from time import sleep, time
 from types import FrameType
 from typing import Optional
 
+from .._exceptions import WorkerCrashedError, WorkerError, WorkerTimeoutError
 from .._handlers import discover_handlers, handler_registry
 from .._queues import Message, Queue
 from .._retry import handle_failure
@@ -37,10 +38,7 @@ class Eventide:
         self._config = config
 
     def run(self) -> None:
-        eventide_logger.info(
-            "Starting Eventide...",
-            extra={"config": self._config.model_dump()},
-        )
+        eventide_logger.info("Starting Eventide...")
 
         self._discover_handlers()
         self._setup_signal_handlers()
@@ -54,7 +52,7 @@ class Eventide:
 
         self._workers = {}
         for worker_id in range(1, self._config.concurrency + 1):
-            self._spawn_worker(worker_id=worker_id)
+            self._spawn_worker(worker_id)
 
         poll_interval, empty_polls = self._config.min_poll_interval, 0
         while not self._shutdown_event.is_set():
@@ -77,10 +75,7 @@ class Eventide:
             ):
                 self._monitor_workers()
 
-        eventide_logger.info(
-            "Stopping Eventide...",
-            extra={"config": self._config.model_dump()},
-        )
+        eventide_logger.info("Stopping Eventide...")
 
         self._shutdown(force=False)
 
@@ -114,26 +109,12 @@ class Eventide:
                 handler.retry_max_backoff = max(handler.retry_max_backoff, 0)
 
     def _setup_signal_handlers(self) -> None:
-        def handle_signal(signum: int, frame: Optional[FrameType]) -> None:
+        def handle_signal(_signum: int, _frame: Optional[FrameType]) -> None:
             if not self._shutdown_event.is_set():
-                eventide_logger.info(
-                    "Shutting down gracefully...",
-                    extra={
-                        "config": self._config.model_dump(),
-                        "signal": signum,
-                        "frame": frame,
-                    },
-                )
+                eventide_logger.info("Shutting down gracefully...")
                 self._shutdown_event.set()
             else:
-                eventide_logger.info(
-                    "Forcing immediate shutdown...",
-                    extra={
-                        "config": self._config.model_dump(),
-                        "signal": signum,
-                        "frame": frame,
-                    },
-                )
+                eventide_logger.info("Forcing immediate shutdown...")
                 self._shutdown(force=True)
                 sys_exit(1)
 
@@ -144,13 +125,7 @@ class Eventide:
         def _worker_process() -> None:
             signal(SIGINT, SIG_IGN)
             signal(SIGTERM, SIG_IGN)
-
-            Worker(
-                worker_id=worker_id,
-                queue=self._queue,
-                shutdown_event=self._shutdown_event,
-                heartbeats=self._heartbeats,
-            ).run()
+            Worker(worker_id, self._queue, self._shutdown_event, self._heartbeats).run()
 
         self._workers[worker_id] = WorkerState(
             worker_id=worker_id,
@@ -183,34 +158,44 @@ class Eventide:
             )
 
         for worker_id, worker_state in list(self._workers.items()):
-            heartbeat = worker_state.heartbeat
-            message = worker_state.message
+            message, heartbeat = worker_state.message, worker_state.heartbeat
             handler = message.eventide_metadata.handler if message else None
+            crashed = not worker_state.process.is_alive()
+            timed_out = message and handler and (time() - heartbeat) > handler.timeout
 
-            if message and handler and (time() - heartbeat) > handler.timeout:
-                self._kill_worker(worker_id=worker_id)
+            if crashed or timed_out:
+                self._kill_worker(worker_id)
 
                 if not self._shutdown_event.is_set():
-                    self._spawn_worker(worker_id=worker_id)
+                    self._spawn_worker(worker_id)
 
-                    handle_failure(
-                        message=message,
-                        queue=self._queue,
-                        exception=TimeoutError("Handler timed out"),
-                    )
-            elif not self._workers[worker_id].process.is_alive():
-                if self._shutdown_event.is_set():
-                    self._kill_worker(worker_id=worker_id)
-                else:
-                    self._spawn_worker(worker_id=worker_id)
+                if message:
+                    exception = WorkerError("Worker error")
+
+                    if crashed:
+                        exception = WorkerCrashedError(
+                            f"Worker {worker_id} crashed while handling message "
+                            f"{message.id}",
+                        )
+                    elif timed_out:
+                        exception = WorkerTimeoutError(
+                            f"Worker {worker_id} timed out while handling message "
+                            f"{message.id}",
+                        )
+
+                    handle_failure(message, self._queue, exception)
+
+        sleep(0.1)
 
     def _shutdown(self, force: bool = False) -> None:
+        self._shutdown_event.set()
+
         if not force:
             while self._workers:
                 self._monitor_workers()
 
         for worker_id in list(self._workers.keys()):
-            self._kill_worker(worker_id=worker_id)
+            self._kill_worker(worker_id)
 
         self._heartbeats.close()
         self._heartbeats.cancel_join_thread()

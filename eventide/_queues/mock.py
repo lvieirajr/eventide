@@ -28,10 +28,7 @@ class MockQueue(Queue[MockMessage]):
     def pull_messages(self) -> list[MockMessage]:
         message_count = randint(self._config.min_messages, self._config.max_messages)
 
-        queue_logger.debug(
-            f"Pulled {message_count} messages from Mock Queue",
-            extra={"config": self._config.model_dump(), "messages": message_count},
-        )
+        queue_logger.debug(f"Pulled {message_count} messages from Mock Queue")
 
         return [
             MockMessage(
