@@ -1,6 +1,5 @@
 from random import choices, randint
 from string import ascii_letters, digits
-from sys import maxsize
 from uuid import uuid4
 
 from pydantic import NonNegativeInt, PositiveInt
@@ -22,17 +21,12 @@ class MockQueueConfig(QueueConfig):
 class MockQueue(Queue[MockMessage]):
     _config: MockQueueConfig
 
-    def pull_messages(self) -> list[MockMessage]:
-        with self._size.get_lock():
-            max_messages = min(
-                self._config.max_messages,
-                (self._config.buffer_size or maxsize) - self._size.value,
-            )
+    @property
+    def max_messages_per_poll(self) -> int:
+        return self._config.max_messages
 
-        message_count = randint(
-            min(self._config.min_messages, max_messages),
-            max_messages,
-        )
+    def pull_messages(self) -> list[MockMessage]:
+        message_count = randint(self._config.min_messages, self._config.max_messages)
 
         queue_logger.debug(
             f"Pulled {message_count} messages from Mock Queue",

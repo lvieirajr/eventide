@@ -1,16 +1,17 @@
-import logging
+from logging import INFO, basicConfig
+from os import environ
 
 from eventide import CloudflareQueueConfig, Eventide, EventideConfig
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
+    basicConfig(level=INFO)
 
     Eventide(
         config=EventideConfig(
             handler_paths=["./examples"],
             queue=CloudflareQueueConfig(
-                account_id="<account_id>",
-                queue_id="<queue_id>",
+                account_id=environ.get("CLOUDFLARE_ACCOUNT_ID"),
+                queue_id=environ.get("CLOUDFLARE_QUEUE_ID"),
                 buffer_size=20,
             ),
             concurrency=2,

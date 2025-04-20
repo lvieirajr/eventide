@@ -9,7 +9,7 @@ if __name__ == "__main__":
         config=EventideConfig(
             handler_paths=["./examples"],
             queue=MockQueueConfig(
-                min_messages=1,
+                min_messages=0,
                 max_messages=10,
                 buffer_size=20,
             ),

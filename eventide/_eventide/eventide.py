@@ -58,11 +58,8 @@ class Eventide:
 
         poll_interval, empty_polls = self._config.min_poll_interval, 0
         while not self._shutdown_event.is_set():
-            if not self._queue.full:
-                self._queue.enqueue_retries()
-
-            if not self._queue.full:
-                self._queue.enqueue_messages()
+            self._queue.enqueue_retries()
+            self._queue.enqueue_messages()
 
             if self._queue.empty:
                 poll_interval = min(

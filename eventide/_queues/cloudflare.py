@@ -2,7 +2,6 @@ from collections.abc import Generator
 from contextlib import contextmanager
 from logging import getLogger
 from multiprocessing.context import ForkContext
-from sys import maxsize
 from typing import Any, Optional
 
 from pydantic import Field, PositiveInt
@@ -38,18 +37,16 @@ class CloudflareQueue(Queue[CloudflareMessage]):
 
         self._cloudflare_client = Cloudflare()
 
-    def pull_messages(self) -> list[CloudflareMessage]:
-        with self._size.get_lock():
-            max_messages = min(
-                self._config.batch_size,
-                (self._config.buffer_size or maxsize) - self._size.value,
-            )
+    @property
+    def max_messages_per_poll(self) -> int:
+        return self._config.batch_size
 
+    def pull_messages(self) -> list[CloudflareMessage]:
         with self._suppress_httpx_info_logs():
             response = self._cloudflare_client.queues.messages.pull(
                 self._config.queue_id,
                 account_id=self._config.account_id,
-                batch_size=max_messages,
+                batch_size=self.max_messages_per_poll,
             )
 
         return [

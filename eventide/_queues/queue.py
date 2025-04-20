@@ -4,6 +4,7 @@ from multiprocessing.context import ForkContext
 from multiprocessing.queues import Queue as MultiprocessingQueue
 from multiprocessing.sharedctypes import Synchronized
 from queue import Empty
+from sys import maxsize
 from time import time
 from typing import Any, Callable, ClassVar, Generic, TypeVar
 
@@ -51,6 +52,11 @@ class Queue(Generic[TMessage], ABC):
 
         self._size = self._context.Value("i", 0)
 
+    @property
+    @abstractmethod
+    def max_messages_per_poll(self) -> int:
+        raise NotImplementedError
+
     @abstractmethod
     def pull_messages(self) -> list[TMessage]:
         raise NotImplementedError
@@ -85,20 +91,8 @@ class Queue(Generic[TMessage], ABC):
 
         return queue_subclass(config=config, context=context)
 
-    @property
-    def empty(self) -> bool:
-        with self._size.get_lock():
-            return bool(self._size.value == 0)
-
-    @property
-    def full(self) -> bool:
-        if self._config.buffer_size == 0:
-            return False
-
-        with self._size.get_lock():
-            return bool(self._size.value == self._config.buffer_size)
-
-    def parse_message_body(self, raw_body: str) -> dict[str, Any]:
+    @staticmethod
+    def parse_message_body(raw_body: str) -> dict[str, Any]:
         body = None
 
         try:
@@ -111,6 +105,11 @@ class Queue(Generic[TMessage], ABC):
 
         return body
 
+    @property
+    def empty(self) -> bool:
+        with self._size.get_lock():
+            return bool(self._size.value == 0)
+
     def get_message(self) -> TMessage:
         message = self._message_buffer.get_nowait()
 
@@ -119,7 +118,7 @@ class Queue(Generic[TMessage], ABC):
 
         return message
 
-    def retry_message(self, message: TMessage) -> None:
+    def buffer_retry(self, message: TMessage) -> None:
         self._retry_buffer.put_nowait(message)
 
     def enqueue_retries(self) -> None:
@@ -149,11 +148,17 @@ class Queue(Generic[TMessage], ABC):
                         self._message_buffer.put_nowait(message)
                         self._size.value += 1
                     else:
-                        self.retry_message(message)
+                        self.buffer_retry(message=message)
             else:
-                self.retry_message(message)
+                self.buffer_retry(message=message)
 
     def enqueue_messages(self) -> None:
+        with self._size.get_lock():
+            buffer_size = self._config.buffer_size or maxsize
+
+            if buffer_size - self._size.value < self.max_messages_per_poll:
+                return
+
         for message in self.pull_messages():
             for handler in handler_registry:
                 if handler.matcher(message):

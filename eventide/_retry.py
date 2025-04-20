@@ -28,7 +28,7 @@ def handle_failure(
         message.eventide_metadata.attempt = attempt + 1
         message.eventide_metadata.retry_at = time() + backoff
 
-        queue.retry_message(message=message)
+        queue.buffer_retry(message=message)
 
         worker_logger.warning(
             f"Message {message.id} handling failed with {type(exception).__name__}. "
