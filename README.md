@@ -7,7 +7,7 @@ A fast, simple, and extensible queue worker framework for Python.
 
 ## Overview
 
-Eventide is a modern, lightweight framework for building robust queue-based worker systems in Python. It provides a clean, modular, and provider-agnostic architecture for consuming and processing messages from a variety of queue backends (SQS, Cloudflare, and more).
+Eventide is a modern, lightweight framework for building robust queue-based worker systems in Python. It provides a clean, modular, and provider-agnostic architecture for consuming and processing messages from a variety of queue backends (SQS, Cloudflare, and more to come).
 
 **Key Features:**
 - Multiprocess architecture for high throughput and resilience
@@ -22,7 +22,7 @@ Eventide is a modern, lightweight framework for building robust queue-based work
 
 **Eventide** orchestrates the lifecycle of your queue worker system:
 - **Main Process:** Manages configuration, queue instantiation, worker process lifecycle, and graceful shutdown.
-- **Queue Threads:** Continuously pull messages from external queues (SQS, Cloudflare, etc.) into internal buffers.
+- **Queue:** Continuously pull messages from external queues (SQS, Cloudflare, etc.) into internal buffers.
 - **Worker Processes:** Each worker consumes messages from the buffer and routes them to user-defined handlers that run within the Worker's process.
 - **Handlers:** User functions decorated with `@eventide_handler` that process messages matching specific patterns.
 
@@ -86,6 +86,7 @@ config = EventideConfig(
     ),
     concurrency=4,
     timeout=30.0,  # Handler timeout (seconds)
+    retry_for=[ValueError],  # Retry for specific exceptions
     retry_limit=5,  # Max retries per message
     retry_min_backoff=1.0,  # Min backoff in seconds
     retry_max_backoff=60.0, # Max backoff in seconds
@@ -137,7 +138,6 @@ sqs_config = SQSQueueConfig(
     url="https://sqs.us-east-1.amazonaws.com/123456789012/my-queue",
     visibility_timeout=30,  # seconds
     max_number_of_messages=10,  # max messages to fetch
-    wait_time_seconds=20,  # for long polling
     buffer_size=100,  # internal buffer size
 )
 ```
