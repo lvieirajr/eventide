@@ -21,7 +21,7 @@ class MessageMetadata(PydanticModel):
 
 class Message(PydanticModel):
     id: str
-    body: dict[str, Any]
+    body: Any
     eventide_metadata: MessageMetadata = Field(default_factory=MessageMetadata)
 
 
@@ -89,18 +89,11 @@ class Queue(Generic[TMessage], ABC):
         return queue_subclass(config=config, context=context)
 
     @staticmethod
-    def parse_message_body(raw_body: str) -> dict[str, Any]:
-        body = None
-
+    def parse_message_body(body: str) -> Any:
         try:
-            body = loads(raw_body)
+            return loads(body)
         except JSONDecodeError:
-            pass
-
-        if not isinstance(body, dict):
-            body = {"raw": raw_body}
-
-        return body
+            return body
 
     @property
     def empty(self) -> bool:

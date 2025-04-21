@@ -31,13 +31,8 @@ class MockQueue(Queue[MockMessage]):
         queue_logger.debug(f"Pulled {message_count} messages from Mock Queue")
 
         return [
-            MockMessage(
-                id=str(uuid4()),
-                body={
-                    "value": "".join(choices(ascii_letters + digits, k=randint(1, 10))),
-                },
-            )
-            for _ in range(message_count)
+            self._build_json_message() if index % 2 == 0 else self._build_str_message()
+            for index in range(message_count)
         ]
 
     def ack_message(self, message: MockMessage) -> None:
@@ -45,3 +40,17 @@ class MockQueue(Queue[MockMessage]):
 
     def dlq_message(self, message: MockMessage) -> None:
         queue_logger.debug(f"Sent message {message.id} to the DLQ")
+
+    def _build_json_message(self) -> MockMessage:
+        return MockMessage(
+            id=str(uuid4()),
+            body={
+                "value": "".join(choices(ascii_letters + digits, k=randint(1, 10))),
+            },
+        )
+
+    def _build_str_message(self) -> MockMessage:
+        return MockMessage(
+            id=str(uuid4()),
+            body="".join(choices(ascii_letters + digits, k=randint(1, 10))),
+        )

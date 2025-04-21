@@ -29,3 +29,8 @@ def handle_1_to_5(message: Message) -> None:
 @app.handler("length(body.value) >= `6` && length(body.value) <= `10`")
 def handle_6_to_10(message: Message) -> None:
     sleep(uniform(0, len(message.body["value"]) / 3.0))
+
+
+@app.handler(lambda message: isinstance(message["body"], str))
+def handle_non_json(message: Message) -> None:
+    sleep(uniform(0, len(message.body) / 3.0))

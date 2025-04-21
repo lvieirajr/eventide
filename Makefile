@@ -110,6 +110,22 @@ pytest:  ##@Testing Runs the PyTest test suite
 
 
 # ======================================================================================
+# Examples
+# ======================================================================================
+.PHONY: mock
+mock:  ##@Examples Runs the Mock example
+	@eventide run -a examples.mock:app
+
+.PHONY: sqs
+sqs:  ##@Examples Runs the SQS example
+	@eventide run -a examples.sqs:app
+
+.PHONY: cloudflare
+cloudflare:  ##@Examples Runs the Cloudflare example
+	@eventide run -a examples.cloudflare:app
+
+
+# ======================================================================================
 # Help  -  https://stackoverflow.com/a/30796664
 # ======================================================================================
 HELP_FUN = \

@@ -1,3 +1,4 @@
+from collections.abc import Iterable
 from functools import wraps
 from importlib import import_module
 from multiprocessing import get_context
@@ -12,10 +13,10 @@ from sys import exit as sys_exit
 from sys import path
 from time import sleep, time
 from types import FrameType
-from typing import Any, Callable, Literal, Optional
+from typing import Any, Callable, Optional, Union
 
 from .._exceptions import WorkerCrashedError, WorkerError, WorkerTimeoutError
-from .._handlers import Handler, HandlerMatcher
+from .._handlers import Handler, HandlerMatcher, MatcherCallable
 from .._queues import Message, Queue
 from .._utils.logging import eventide_logger
 from .._utils.pydantic import PydanticModel
@@ -53,8 +54,8 @@ class Eventide:
 
     def handler(
         self,
-        *matchers: str,
-        operator: Literal["all", "any", "and", "or"] = "all",
+        *matchers: Union[str, MatcherCallable],
+        operator: Callable[[Iterable[bool]], bool] = all,
         timeout: Optional[float] = None,
         retry_for: Optional[list[type[Exception]]] = None,
         retry_limit: Optional[int] = None,

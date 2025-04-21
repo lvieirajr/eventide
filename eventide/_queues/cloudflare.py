@@ -52,7 +52,7 @@ class CloudflareQueue(Queue[CloudflareMessage]):
         return [
             CloudflareMessage(
                 id=message["id"],
-                body=self.parse_message_body(raw_body=message["body"]),
+                body=self.parse_message_body(message["body"]),
                 lease_id=message["lease_id"],
                 metadata=message["metadata"],
                 timestamp_ms=message["timestamp_ms"],

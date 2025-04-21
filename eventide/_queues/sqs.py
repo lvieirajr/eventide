@@ -52,7 +52,7 @@ class SQSQueue(Queue[SQSMessage]):
         return [
             SQSMessage(
                 id=message["MessageId"],
-                body=self.parse_message_body(raw_body=message["Body"]),
+                body=self.parse_message_body(message["Body"]),
                 receipt_handle=message["ReceiptHandle"],
                 attributes=message["Attributes"],
                 message_attributes=message.get("MessageAttributes") or {},
