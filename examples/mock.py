@@ -1,17 +1,16 @@
 from logging import INFO, basicConfig
-from os import environ
 from random import uniform
 from time import sleep
 
-from eventide import Eventide, EventideConfig, Message, SQSQueueConfig
+from eventide import Eventide, EventideConfig, Message, MockQueueConfig
 
 basicConfig(level=INFO)
 
 app = Eventide(
     config=EventideConfig(
-        queue=SQSQueueConfig(
-            region=environ.get("SQS_QUEUE_REGION"),
-            url=environ.get("SQS_QUEUE_URL"),
+        queue=MockQueueConfig(
+            min_messages=0,
+            max_messages=10,
             buffer_size=20,
         ),
         concurrency=2,
@@ -30,7 +29,3 @@ def handle_1_to_5(message: Message) -> None:
 @app.handler("length(body.value) >= `6` && length(body.value) <= `10`")
 def handle_6_to_10(message: Message) -> None:
     sleep(uniform(0, len(message.body["value"]) / 3.0))
-
-
-if __name__ == "__main__":
-    app.run()

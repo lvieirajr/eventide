@@ -1,16 +1,17 @@
 from logging import INFO, basicConfig
+from os import environ
 from random import uniform
 from time import sleep
 
-from eventide import Eventide, EventideConfig, Message, MockQueueConfig
+from eventide import CloudflareQueueConfig, Eventide, EventideConfig, Message
 
 basicConfig(level=INFO)
 
 app = Eventide(
     config=EventideConfig(
-        queue=MockQueueConfig(
-            min_messages=0,
-            max_messages=10,
+        queue=CloudflareQueueConfig(
+            account_id=environ.get("CLOUDFLARE_ACCOUNT_ID"),
+            queue_id=environ.get("CLOUDFLARE_QUEUE_ID"),
             buffer_size=20,
         ),
         concurrency=2,
@@ -29,7 +30,3 @@ def handle_1_to_5(message: Message) -> None:
 @app.handler("length(body.value) >= `6` && length(body.value) <= `10`")
 def handle_6_to_10(message: Message) -> None:
     sleep(uniform(0, len(message.body["value"]) / 3.0))
-
-
-if __name__ == "__main__":
-    app.run()

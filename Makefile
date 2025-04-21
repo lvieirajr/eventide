@@ -42,7 +42,7 @@ lock: pyproject.toml ##@UV Locks the Python dependencies
 .PHONY: sync
 sync: pyproject.toml uv.lock ##@UV Installs the Python dependencies
 	@echo "Installing Python dependencies..."
-	@uv sync --all-extras --frozen --no-install-project
+	@uv sync --all-extras --frozen
 
 .PHONY: build
 build: pyproject.toml uv.lock ##@UV Builds the package

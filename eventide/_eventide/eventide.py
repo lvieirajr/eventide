@@ -32,9 +32,9 @@ class WorkerState(PydanticModel):
 
 
 class Eventide:
-    _handler_registry: set[Handler]
+    config: EventideConfig
 
-    _config: EventideConfig
+    _handlers: set[Handler]
 
     _context: ForkContext
     _queue: Queue[Message]
@@ -43,8 +43,13 @@ class Eventide:
     _workers: dict[int, WorkerState]
 
     def __init__(self, config: EventideConfig) -> None:
-        self._handler_registry = set()
         self._config = config
+        self._handlers = set()
+
+    @property
+    def handlers(self) -> set[Handler]:
+        self._discover_handlers()
+        return self._handlers
 
     def handler(
         self,
@@ -90,7 +95,7 @@ class Eventide:
             else:
                 wrapper.retry_max_backoff = self._config.retry_max_backoff
 
-            self._handler_registry.add(wrapper)
+            self._handlers.add(wrapper)
 
             return wrapper
 
@@ -299,7 +304,7 @@ class Eventide:
             return
 
         for message in self._queue.pull_messages():
-            for handler in self._handler_registry:
+            for handler in self._handlers:
                 if handler.matcher(message):
                     message.eventide_metadata.handler = handler
 

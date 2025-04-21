@@ -59,9 +59,6 @@ app = Eventide(
 @app.handler("body.type == 'greeting'")
 def handle_greeting(message: Message) -> None:
     print(f"Received greeting: {message.body.get('content')}")
-
-if __name__ == "__main__":
-    app.run()
 ```
 
 ## Configuration
@@ -263,10 +260,6 @@ def handle_shipped_order(message):
     print(f"Order {order_id} shipped with tracking number: {tracking_number}")
     # Send confirmation email to customer, update database, etc.
     return True
-
-# Configure and run Eventide
-if __name__ == "__main__":
-    app.run()
 ```
 
 To run this application:
@@ -276,7 +269,7 @@ To run this application:
 pip install eventide[sqs]
 
 # Run the application
-python app.py
+eventide run -a app:app
 ```
 
 This example demonstrates how to:
@@ -287,9 +280,9 @@ This example demonstrates how to:
 
 ## Roadmap
 
+- [ ] Lifecycle hooks
 - [ ] Comprehensive test suite
 - [ ] Message scheduling (cron and one-off)
-- [ ] Lifecycle hooks
 
 ## License
 

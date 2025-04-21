@@ -3,15 +3,15 @@ from os import environ
 from random import uniform
 from time import sleep
 
-from eventide import CloudflareQueueConfig, Eventide, EventideConfig, Message
+from eventide import Eventide, EventideConfig, Message, SQSQueueConfig
 
 basicConfig(level=INFO)
 
 app = Eventide(
     config=EventideConfig(
-        queue=CloudflareQueueConfig(
-            account_id=environ.get("CLOUDFLARE_ACCOUNT_ID"),
-            queue_id=environ.get("CLOUDFLARE_QUEUE_ID"),
+        queue=SQSQueueConfig(
+            region=environ.get("SQS_QUEUE_REGION"),
+            url=environ.get("SQS_QUEUE_URL"),
             buffer_size=20,
         ),
         concurrency=2,
@@ -30,7 +30,3 @@ def handle_1_to_5(message: Message) -> None:
 @app.handler("length(body.value) >= `6` && length(body.value) <= `10`")
 def handle_6_to_10(message: Message) -> None:
     sleep(uniform(0, len(message.body["value"]) / 3.0))
-
-
-if __name__ == "__main__":
-    app.run()
