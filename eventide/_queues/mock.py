@@ -4,7 +4,7 @@ from uuid import uuid4
 
 from pydantic import NonNegativeInt, PositiveInt
 
-from .._utils import queue_logger
+from .._utils.logging import queue_logger
 from .queue import Message, Queue, QueueConfig
 
 
@@ -22,7 +22,7 @@ class MockQueue(Queue[MockMessage]):
     _config: MockQueueConfig
 
     @property
-    def max_messages_per_poll(self) -> int:
+    def max_messages_per_pull(self) -> int:
         return self._config.max_messages
 
     def pull_messages(self) -> list[MockMessage]:

@@ -38,7 +38,7 @@ class CloudflareQueue(Queue[CloudflareMessage]):
         self._cloudflare_client = Cloudflare()
 
     @property
-    def max_messages_per_poll(self) -> int:
+    def max_messages_per_pull(self) -> int:
         return self._config.batch_size
 
     def pull_messages(self) -> list[CloudflareMessage]:
@@ -46,7 +46,7 @@ class CloudflareQueue(Queue[CloudflareMessage]):
             response = self._cloudflare_client.queues.messages.pull(
                 self._config.queue_id,
                 account_id=self._config.account_id,
-                batch_size=self.max_messages_per_poll,
+                batch_size=self.max_messages_per_pull,
             )
 
         return [

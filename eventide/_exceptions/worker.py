@@ -1,5 +1,4 @@
-class EventideError(Exception):
-    pass
+from .eventide import EventideError
 
 
 class WorkerError(EventideError):

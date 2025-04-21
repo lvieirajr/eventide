@@ -5,7 +5,6 @@ from ._exceptions import (
     WorkerError,
     WorkerTimeoutError,
 )
-from ._handlers import eventide_handler
 from ._queues import (
     CloudflareQueueConfig,
     Message,
@@ -28,7 +27,6 @@ __all__ = [
     "WorkerCrashedError",
     "WorkerError",
     "WorkerTimeoutError",
-    "eventide_handler",
 ]
 
 

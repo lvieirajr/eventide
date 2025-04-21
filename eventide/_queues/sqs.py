@@ -35,13 +35,13 @@ class SQSQueue(Queue[SQSMessage]):
         self._sqs_client = client("sqs", region_name=self._config.region)
 
     @property
-    def max_messages_per_poll(self) -> int:
+    def max_messages_per_pull(self) -> int:
         return self._config.max_number_of_messages
 
     def pull_messages(self) -> list[SQSMessage]:
         response = self._sqs_client.receive_message(
             QueueUrl=self._config.url,
-            MaxNumberOfMessages=self.max_messages_per_poll,
+            MaxNumberOfMessages=self.max_messages_per_pull,
             WaitTimeSeconds=1,
             VisibilityTimeout=self._config.visibility_timeout,
             AttributeNames=["All"],

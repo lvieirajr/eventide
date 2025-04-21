@@ -1,19 +1,22 @@
 from time import time
+from typing import TYPE_CHECKING
 
-from ._handlers import Handler
-from ._queues import Message, Queue
-from ._utils import worker_logger
+from .logging import worker_logger
+
+if TYPE_CHECKING:
+    from .._handlers import Handler
+    from .._queues import Message, Queue
 
 
-def should_retry(handler: Handler, attempt: int, exception: BaseException) -> bool:
+def should_retry(handler: "Handler", attempt: int, exception: BaseException) -> bool:
     return attempt <= handler.retry_limit and any(
         isinstance(exception, exception_type) for exception_type in handler.retry_for
     )
 
 
 def handle_failure(
-    message: Message,
-    queue: Queue[Message],
+    message: "Message",
+    queue: "Queue[Message]",
     exception: Exception,
 ) -> None:
     handler = message.eventide_metadata.handler
@@ -28,7 +31,7 @@ def handle_failure(
         message.eventide_metadata.attempt = attempt + 1
         message.eventide_metadata.retry_at = time() + backoff
 
-        queue.buffer_retry(message=message)
+        queue.put_retry_message(message=message)
 
         worker_logger.warning(
             f"Message {message.id} handling failed with {type(exception).__name__}. "

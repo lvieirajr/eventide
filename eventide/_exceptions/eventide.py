@@ -1,0 +1,2 @@
+class EventideError(Exception):
+    pass

@@ -1,24 +1,30 @@
+from functools import wraps
+from importlib import import_module
 from multiprocessing import get_context
 from multiprocessing.context import ForkContext, ForkProcess
 from multiprocessing.queues import Queue as MultiprocessingQueue
 from multiprocessing.synchronize import Event as MultiprocessingEvent
+from pathlib import Path
+from pkgutil import walk_packages
 from queue import Empty
 from signal import SIG_IGN, SIGINT, SIGTERM, signal
 from sys import exit as sys_exit
+from sys import path
 from time import sleep, time
 from types import FrameType
-from typing import Optional
+from typing import Any, Callable, Literal, Optional
 
 from .._exceptions import WorkerCrashedError, WorkerError, WorkerTimeoutError
-from .._handlers import discover_handlers, handler_registry
+from .._handlers import Handler, HandlerMatcher
 from .._queues import Message, Queue
-from .._retry import handle_failure
-from .._utils import BaseModel, eventide_logger
+from .._utils.logging import eventide_logger
+from .._utils.pydantic import PydanticModel
+from .._utils.retry import handle_failure
 from .._workers import HeartBeat, Worker
 from .config import EventideConfig
 
 
-class WorkerState(BaseModel):
+class WorkerState(PydanticModel):
     worker_id: int
     process: ForkProcess
     heartbeat: float
@@ -26,6 +32,8 @@ class WorkerState(BaseModel):
 
 
 class Eventide:
+    _handler_registry: set[Handler]
+
     _config: EventideConfig
 
     _context: ForkContext
@@ -35,7 +43,58 @@ class Eventide:
     _workers: dict[int, WorkerState]
 
     def __init__(self, config: EventideConfig) -> None:
+        self._handler_registry = set()
         self._config = config
+
+    def handler(
+        self,
+        *matchers: str,
+        operator: Literal["all", "any", "and", "or"] = "all",
+        timeout: Optional[float] = None,
+        retry_for: Optional[list[type[Exception]]] = None,
+        retry_limit: Optional[int] = None,
+        retry_min_backoff: Optional[float] = None,
+        retry_max_backoff: Optional[float] = None,
+    ) -> Callable[..., Any]:
+        def decorator(func: Callable[[Message], Any]) -> Handler:
+            wrapper: Handler
+
+            @wraps(func)  # type: ignore[no-redef]
+            def wrapper(message: Message) -> Any:
+                return func(message)
+
+            wrapper.name = f"{func.__module__}.{func.__qualname__}"
+            wrapper.matcher = HandlerMatcher(*matchers, operator=operator)
+            if timeout is not None:
+                wrapper.timeout = timeout
+            else:
+                wrapper.timeout = self._config.timeout
+
+            if retry_for is not None:
+                wrapper.retry_for = retry_for
+            else:
+                wrapper.retry_for = self._config.retry_for
+
+            if retry_limit is not None:
+                wrapper.retry_limit = retry_limit
+            else:
+                wrapper.retry_limit = self._config.retry_limit
+
+            if retry_min_backoff is not None:
+                wrapper.retry_min_backoff = retry_min_backoff
+            else:
+                wrapper.retry_min_backoff = self._config.retry_min_backoff
+
+            if retry_max_backoff is not None:
+                wrapper.retry_max_backoff = retry_max_backoff
+            else:
+                wrapper.retry_max_backoff = self._config.retry_max_backoff
+
+            self._handler_registry.add(wrapper)
+
+            return wrapper
+
+        return decorator
 
     def run(self) -> None:
         eventide_logger.info("Starting Eventide...")
@@ -54,23 +113,23 @@ class Eventide:
         for worker_id in range(1, self._config.concurrency + 1):
             self._spawn_worker(worker_id)
 
-        poll_interval, empty_polls = self._config.min_poll_interval, 0
+        pull_interval, empty_pulls = self._config.min_pull_interval, 0
         while not self._shutdown_event.is_set():
-            self._queue.enqueue_retries()
-            self._queue.enqueue_messages()
+            self._enqueue_retries()
+            self._enqueue_messages()
 
             if self._queue.empty:
-                poll_interval = min(
-                    self._config.max_poll_interval,
-                    self._config.min_poll_interval * (2**empty_polls),
+                pull_interval = min(
+                    self._config.max_pull_interval,
+                    self._config.min_pull_interval * (2**empty_pulls),
                 )
-                empty_polls += 1
+                empty_pulls += 1
             else:
-                poll_interval, empty_polls = self._config.min_poll_interval, 0
+                pull_interval, empty_pulls = self._config.min_pull_interval, 0
 
-            poll_start = time()
+            pull_start = time()
             while (
-                time() - poll_start < poll_interval
+                time() - pull_start < pull_interval
                 and not self._shutdown_event.is_set()
             ):
                 self._monitor_workers()
@@ -80,33 +139,58 @@ class Eventide:
         self._shutdown(force=False)
 
     def _discover_handlers(self) -> None:
-        discover_handlers(self._config.handler_paths)
+        for raw_path in set(self._config.handler_paths) or {"."}:
+            resolved_path = Path(raw_path).resolve()
 
-        for handler in handler_registry:
-            if handler.timeout is None:
-                handler.timeout = self._config.timeout
-            else:
-                handler.timeout = max(handler.timeout, 0.001)
+            if not resolved_path.exists():
+                eventide_logger.debug(f"Path '{resolved_path}' does not exist")
+                continue
 
-            if handler.retry_for is None:
-                handler.retry_for = list(self._config.retry_for)
-            else:
-                handler.retry_for = list(handler.retry_for)
+            base = str(
+                resolved_path.parent if resolved_path.is_file() else resolved_path
+            )
+            if base not in path:
+                path.insert(0, base)
 
-            if handler.retry_limit is None:
-                handler.retry_limit = self._config.retry_limit
-            else:
-                handler.retry_limit = max(handler.retry_limit, 0)
+            if resolved_path.is_file() and resolved_path.suffix == ".py":
+                name = resolved_path.stem
 
-            if handler.retry_min_backoff is None:
-                handler.retry_min_backoff = self._config.retry_min_backoff
-            else:
-                handler.retry_min_backoff = max(handler.retry_min_backoff, 0)
+                try:
+                    import_module(name)
+                except (ImportError, TypeError):
+                    eventide_logger.debug(f"Failed to discover handlers from '{name}'")
 
-            if handler.retry_max_backoff is None:
-                handler.retry_max_backoff = self._config.retry_max_backoff
-            else:
-                handler.retry_max_backoff = max(handler.retry_max_backoff, 0)
+                continue
+
+            if resolved_path.is_dir():
+                init_file = resolved_path / "__init__.py"
+
+                if not init_file.exists():
+                    eventide_logger.debug(
+                        f"Directory '{resolved_path}' is not a Python package",
+                    )
+                    continue
+
+                name = resolved_path.name
+                try:
+                    module = import_module(name)
+                except (ImportError, TypeError):
+                    eventide_logger.debug(f"Failed to discover handlers from '{name}'")
+                    continue
+
+                for _, module_name, is_package in walk_packages(
+                    module.__path__,
+                    prefix=module.__name__ + ".",
+                ):
+                    if is_package:
+                        continue
+
+                    try:
+                        import_module(module_name)
+                    except (ImportError, TypeError):
+                        eventide_logger.debug(
+                            f"Failed to discover handlers from '{module_name}'",
+                        )
 
     def _setup_signal_handlers(self) -> None:
         def handle_signal(_signum: int, _frame: Optional[FrameType]) -> None:
@@ -138,9 +222,13 @@ class Eventide:
     def _kill_worker(self, worker_id: int) -> None:
         current_worker = self._workers.pop(worker_id, None)
 
-        if current_worker and current_worker.process.is_alive():
-            current_worker.process.terminate()
-            current_worker.process.kill()
+        if current_worker:
+            if current_worker.process.is_alive():
+                current_worker.process.terminate()
+
+            if current_worker.process.is_alive():
+                current_worker.process.kill()
+
             current_worker.process.join()
 
     def _monitor_workers(self) -> None:
@@ -186,6 +274,44 @@ class Eventide:
                     handle_failure(message, self._queue, exception)
 
         sleep(0.1)
+
+    def _enqueue_retries(self) -> None:
+        retry_messages = []
+
+        while True:
+            try:
+                retry_messages.append(self._queue.get_retry_message())
+            except Empty:
+                break
+
+        for message in sorted(
+            retry_messages,
+            key=lambda m: m.eventide_metadata.retry_at,
+        ):
+            if message.eventide_metadata.retry_at <= time() and not self._queue.full:
+                self._queue.put_message(message)
+                continue
+
+            self._queue.put_retry_message(message)
+
+    def _enqueue_messages(self) -> None:
+        if not self._queue.should_pull:
+            return
+
+        for message in self._queue.pull_messages():
+            for handler in self._handler_registry:
+                if handler.matcher(message):
+                    message.eventide_metadata.handler = handler
+
+                    self._queue.put_message(message)
+                    break
+
+            if not message.eventide_metadata.handler:
+                eventide_logger.error(
+                    f"No handler found for message {message.id}",
+                    extra={"message_id": message.id},
+                )
+                self._queue.dlq_message(message)
 
     def _shutdown(self, force: bool = False) -> None:
         self._shutdown_event.set()

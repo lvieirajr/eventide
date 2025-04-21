@@ -5,11 +5,12 @@ from time import sleep, time
 from typing import Optional
 
 from .._queues import Message, Queue
-from .._retry import handle_failure
-from .._utils import BaseModel, worker_logger
+from .._utils.logging import worker_logger
+from .._utils.pydantic import PydanticModel
+from .._utils.retry import handle_failure
 
 
-class HeartBeat(BaseModel):
+class HeartBeat(PydanticModel):
     worker_id: int
     timestamp: float
     message: Optional[Message] = None
@@ -35,9 +36,8 @@ class Worker:
 
     def run(self) -> None:
         while not self._shutdown_event.is_set():
-            self._heartbeat(message=None)
-
             message = self._get_message()
+
             if message:
                 self._heartbeat(message=message)
                 self._handle_message(message=message)

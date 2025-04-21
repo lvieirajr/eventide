@@ -24,7 +24,7 @@ Eventide is a modern, lightweight framework for building robust queue-based work
 - **Main Process:** Manages configuration, queue instantiation, worker process lifecycle, and graceful shutdown.
 - **Queue:** Continuously pull messages from external queues (SQS, Cloudflare, etc.) into internal buffers.
 - **Worker Processes:** Each worker consumes messages from the buffer and routes them to user-defined handlers that run within the Worker's process.
-- **Handlers:** User functions decorated with `@eventide_handler` that process messages matching specific patterns.
+- **Handlers:** User functions decorated with `@app.handler` that process messages matching specific patterns.
 
 All configuration is done via Pydantic models, ensuring type safety and validation.
 
@@ -43,30 +43,25 @@ pip install eventide[cloudflare]
 ## Quick Start
 
 ```python
-from eventide import (
-    Eventide,
-    EventideConfig,
-    Message,
-    SQSQueueConfig,
-    eventide_handler,
+from eventide import Eventide, EventideConfig, Message, SQSQueueConfig
+
+# Instantiate the eventide app
+app = Eventide(
+    config=EventideConfig(
+        queue=SQSQueueConfig(
+            region="us-east-1",
+            url="https://sqs.us-east-1.amazonaws.com/123456789012/my-queue",
+        ),
+    ),
 )
 
 # Define a handler
-@eventide_handler("body.type == 'greeting'")
-def handle_greeting(message: Message):
+@app.handler("body.type == 'greeting'")
+def handle_greeting(message: Message) -> None:
     print(f"Received greeting: {message.body.get('content')}")
 
-# Configure Eventide
-config = EventideConfig(
-    queue=SQSQueueConfig(
-        region="us-east-1",
-        url="https://sqs.us-east-1.amazonaws.com/123456789012/my-queue",
-    ),
-    concurrency=2,  # Number of worker processes
-)
-
-# Start Eventide
-Eventide(config).run()
+if __name__ == "__main__":
+    app.run()
 ```
 
 ## Configuration
@@ -96,23 +91,26 @@ config = EventideConfig(
 
 ## Message Handlers
 
-Handlers are registered using the `@eventide_handler` decorator. You can match on message attributes, set retry/backoff policies, and more.
+Handlers are registered using the `@app.handler` decorator.
+You can match on message attributes, set retry/backoff policies, and more.
 
 ```python
-from eventide import eventide_handler
+from eventide import Eventide, EventideConfig
 
-@eventide_handler("body.type == 'email'", retry_limit=3, retry_for=[ValueError])
+app = Eventide(EventideConfig(...))
+
+@app.handler("body.type == 'email'", retry_limit=3, retry_for=[ValueError])
 def process_email(message):
-    # Process email
     print(f"Processing email: {message.body}")
-    return True  # Acknowledge
 ```
 
 Advanced matching (multiple matchers, logical operators):
 ```python
-from eventide import eventide_handler
+from eventide import Eventide, EventideConfig
 
-@eventide_handler(
+app = Eventide(EventideConfig(...))
+
+@app.handler(
     "body.type == 'notification'",
     "body.priority == 'high'",
     operator="all"  # or "any"
@@ -191,10 +189,12 @@ JMESPath is a query language for JSON that allows you to extract and transform e
 You can combine multiple JMESPath expressions with logical operators:
 
 ```python
-from eventide import eventide_handler
+from eventide import Eventide, EventideConfig
+
+app = Eventide(EventideConfig(...))
 
 # Match messages that satisfy ALL conditions
-@eventide_handler(
+@app.handler(
     "body.type == 'notification'",
     "body.priority == 'high'",
     operator="and"  # Default is "all" which is the same as "and"
@@ -203,7 +203,7 @@ def priority_notifications_handler(_message):
   pass
 
 # Match messages that satisfy ANY condition
-@eventide_handler(
+@app.handler(
     "body.type == 'email'",
     "body.type == 'sms'",
     operator="or"  # Same as "any"
@@ -221,10 +221,23 @@ Here's a complete example of using Eventide to build an order processing system:
 
 ```python
 # app.py
-from eventide import Eventide, EventideConfig, SQSQueueConfig, eventide_handler
+from eventide import Eventide, EventideConfig, SQSQueueConfig
+
+app = Eventide(
+    config=EventideConfig(
+        queue=SQSQueueConfig(
+            region="us-east-1",
+            url="https://sqs.us-east-1.amazonaws.com/123456789012/orders-queue",
+            # Increase visibility timeout for longer processing tasks
+            visibility_timeout=120,
+        ),
+        # Use multiple workers for better throughput
+        concurrency=4,
+    ),
+)
 
 # Define handlers for different message types
-@eventide_handler("body.type == 'new_order'")
+@app.handler("body.type == 'new_order'")
 def process_new_order(message):
     order = message.body.get('order', {})
     order_id = order.get('id')
@@ -232,7 +245,7 @@ def process_new_order(message):
     # Your order processing logic here
     return True
 
-@eventide_handler("body.type == 'payment_confirmed'")
+@app.handler("body.type == 'payment_confirmed'")
 def process_payment(message):
     order_id = message.body.get('order_id')
     amount = message.body.get('amount')
@@ -240,7 +253,7 @@ def process_payment(message):
     # Update order status, trigger shipping, etc.
     return True
 
-@eventide_handler(
+@app.handler(
     "body.type == 'order_status_update'",
     "body.status == 'shipped'"
 )
@@ -253,20 +266,7 @@ def handle_shipped_order(message):
 
 # Configure and run Eventide
 if __name__ == "__main__":
-    config = EventideConfig(
-        queue=SQSQueueConfig(
-            region="us-east-1",
-            url="https://sqs.us-east-1.amazonaws.com/123456789012/orders-queue",
-            # Increase visibility timeout for longer processing tasks
-            visibility_timeout=120,
-          ),
-        # Use multiple workers for better throughput
-        concurrency=4,
-    )
-
-    # Start processing messages
-    print("Starting order processing system...")
-    Eventide(config).run()
+    app.run()
 ```
 
 To run this application:
