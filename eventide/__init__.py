@@ -1,10 +1,5 @@
 from ._eventide import Eventide, EventideConfig
-from ._exceptions import (
-    EventideError,
-    WorkerCrashedError,
-    WorkerError,
-    WorkerTimeoutError,
-)
+from ._exceptions import EventideError, WorkerCrashedError, WorkerError
 from ._queues import (
     CloudflareQueueConfig,
     Message,
@@ -26,7 +21,6 @@ __all__ = [
     "SQSQueueConfig",
     "WorkerCrashedError",
     "WorkerError",
-    "WorkerTimeoutError",
 ]
 
 

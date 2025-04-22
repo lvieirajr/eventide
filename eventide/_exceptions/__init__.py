@@ -1,2 +1,2 @@
 from .eventide import EventideError
-from .worker import WorkerCrashedError, WorkerError, WorkerTimeoutError
+from .worker import WorkerCrashedError, WorkerError

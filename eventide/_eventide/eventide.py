@@ -15,7 +15,7 @@ from time import sleep, time
 from types import FrameType
 from typing import Any, Callable, Optional, Union
 
-from .._exceptions import WorkerCrashedError, WorkerError, WorkerTimeoutError
+from .._exceptions import WorkerCrashedError
 from .._handlers import Handler, HandlerMatcher, MatcherCallable
 from .._queues import Message, Queue
 from .._utils.logging import eventide_logger
@@ -252,32 +252,21 @@ class Eventide:
             )
 
         for worker_id, worker_state in list(self._workers.items()):
-            message, heartbeat = worker_state.message, worker_state.heartbeat
-            handler = message.eventide_metadata.handler if message else None
-            crashed = not worker_state.process.is_alive()
-            timed_out = message and handler and (time() - heartbeat) > handler.timeout
-
-            if crashed or timed_out:
+            if not worker_state.process.is_alive():
                 self._kill_worker(worker_id)
 
                 if not self._shutdown_event.is_set():
                     self._spawn_worker(worker_id)
 
-                if message:
-                    exception = WorkerError("Worker error")
-
-                    if crashed:
-                        exception = WorkerCrashedError(
+                if worker_state.message:
+                    handle_failure(
+                        worker_state.message,
+                        self._queue,
+                        WorkerCrashedError(
                             f"Worker {worker_id} crashed while handling message "
-                            f"{message.id}",
-                        )
-                    elif timed_out:
-                        exception = WorkerTimeoutError(
-                            f"Worker {worker_id} timed out while handling message "
-                            f"{message.id}",
-                        )
-
-                    handle_failure(message, self._queue, exception)
+                            f"{worker_state.message.id}",
+                        ),
+                    )
 
         sleep(0.1)
 

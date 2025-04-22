@@ -1,4 +1,5 @@
 from time import time
+from traceback import format_tb
 from typing import TYPE_CHECKING
 
 from .logging import worker_logger
@@ -22,6 +23,7 @@ def handle_failure(
     handler = message.eventide_metadata.handler
     attempt = message.eventide_metadata.attempt
 
+    exception_type = type(exception).__name__
     if should_retry(handler=handler, attempt=attempt, exception=exception):
         backoff = min(
             handler.retry_max_backoff,
@@ -34,22 +36,24 @@ def handle_failure(
         queue.put_retry_message(message=message)
 
         worker_logger.warning(
-            f"Message {message.id} handling failed with {type(exception).__name__}. "
-            f"Retrying in {backoff}s",
+            f"Message {message.id} handling failed with {exception_type}. Retrying in "
+            f"{backoff}s",
             extra={
                 "message_id": message.id,
                 "handler": handler.name,
                 "attempt": attempt,
-                "exception": exception,
+                "exception": str(exception),
+                "traceback": "".join(format_tb(exception.__traceback__)),
             },
         )
     else:
-        worker_logger.warning(
-            f"Message {message.id} handling failed with {type(exception).__name__}",
+        worker_logger.error(
+            f"Message {message.id} handling failed with {exception_type}",
             extra={
                 "message_id": message.id,
                 "handler": handler.name,
                 "attempt": attempt,
-                "exception": exception,
+                "exception": str(exception),
+                "traceback": "".join(format_tb(exception.__traceback__)),
             },
         )

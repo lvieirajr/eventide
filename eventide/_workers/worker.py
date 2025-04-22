@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor
 from multiprocessing.queues import Queue as MultiprocessingQueue
 from multiprocessing.synchronize import Event as MultiprocessingEvent
 from queue import Empty, ShutDown
@@ -39,41 +40,46 @@ class Worker:
             message = self._get_message()
 
             if message:
-                self._heartbeat(message=message)
-                self._handle_message(message=message)
-                self._heartbeat(message=None)
+                self._heartbeat(message)
+
+                log_extra = {
+                    "message_id": message.id,
+                    "handler": message.eventide_metadata.handler.name,
+                    "attempt": message.eventide_metadata.attempt,
+                }
+
+                worker_logger.info(f"Message {message.id} received", extra=log_extra)
+
+                handler = message.eventide_metadata.handler
+                with ThreadPoolExecutor(max_workers=1) as executor:
+                    start = time()
+                    future = executor.submit(handler, message)
+
+                    try:
+                        future.result(timeout=handler.timeout)
+                    except Exception as exception:
+                        end = time()
+                        self._heartbeat(None)
+                        handle_failure(message, self._queue, exception)
+
+                        if (
+                            isinstance(exception, TimeoutError)
+                            and end - start >= handler.timeout
+                        ):
+                            break
+                    else:
+                        end = time()
+
+                        self._heartbeat(None)
+                        self._queue.ack_message(message)
+
+                        worker_logger.info(
+                            f"Message {message.id} handling succeeded in "
+                            f"{end - start}s",
+                            extra={**log_extra, "duration": end - start},
+                        )
             else:
                 sleep(0.1)
-
-    def _handle_message(self, message: Message) -> None:
-        handler, start = message.eventide_metadata.handler, time()
-
-        worker_logger.info(
-            f"Message {message.id} received",
-            extra={
-                "message_id": message.id,
-                "handler": handler.name,
-                "attempt": message.eventide_metadata.attempt,
-            },
-        )
-        try:
-            message.eventide_metadata.handler(message)
-        except Exception as exception:
-            handle_failure(message=message, queue=self._queue, exception=exception)
-        else:
-            end = time()
-
-            self._queue.ack_message(message=message)
-
-            worker_logger.info(
-                f"Message {message.id} handling succeeded in {end - start}s",
-                extra={
-                    "message_id": message.id,
-                    "handler": handler.name,
-                    "attempt": message.eventide_metadata.attempt,
-                    "duration": end - start,
-                },
-            )
 
     def _get_message(self) -> Optional[Message]:
         try:
