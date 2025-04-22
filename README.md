@@ -110,7 +110,7 @@ app = Eventide(EventideConfig(...))
 @app.handler(
     "body.type == 'notification'",
     "body.priority == 'high'",
-    operator="all"  # or "any"
+    operator=all,  # or any
 )
 def process_notification(_message):
     ...
@@ -194,7 +194,7 @@ app = Eventide(EventideConfig(...))
 @app.handler(
     "body.type == 'notification'",
     "body.priority == 'high'",
-    operator="and"  # Default is "all" which is the same as "and"
+    operator=all
 )
 def priority_notifications_handler(_message):
   pass
@@ -203,7 +203,7 @@ def priority_notifications_handler(_message):
 @app.handler(
     "body.type == 'email'",
     "body.type == 'sms'",
-    operator="or"  # Same as "any"
+    operator=any
 )
 def email_or_sms_handler(_message):
   pass

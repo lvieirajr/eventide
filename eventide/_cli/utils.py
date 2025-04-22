@@ -1,4 +1,6 @@
 from importlib import import_module
+from os import getcwd
+from sys import path
 from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
@@ -8,6 +10,9 @@ if TYPE_CHECKING:
 def resolve_app(app: str) -> "Eventide":
     module_name, *attrs = app.split(":", 1)
     attrs = [*attrs, "app", "application"]
+
+    if getcwd() not in path:
+        path.insert(0, getcwd())
 
     try:
         module = import_module(module_name)
