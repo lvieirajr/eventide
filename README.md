@@ -13,7 +13,7 @@ Eventide is a modern, lightweight framework for building robust queue-based work
 - Multiprocess architecture for high throughput and resilience
 - Provider-agnostic queue abstraction with built-in and custom queue support
 - Declarative, decorator-based message handler registration
-- Robust retry/backoff and dead-letter logic
+- Robust retry/backoff logic
 - Graceful startup and shutdown with signal handling
 - Type-safe configuration using Pydantic models
 - Extensible handler matching and routing
@@ -119,7 +119,6 @@ def process_notification(_message):
 ## Advanced Usage
 - **Graceful Shutdown:** Eventide handles SIGINT/SIGTERM for clean shutdown.
 - **Retries & Backoff:** Handlers can specify retry policies and backoff intervals.
-- **Dead-lettering:** Messages that exceed retry limits are sent to a DLQ (if supported).
 - **Extensible Matching:** Handler matcher logic can be customized for advanced routing.
 
 

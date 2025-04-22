@@ -62,10 +62,6 @@ class Queue(Generic[TMessage], ABC):
     def ack_message(self, message: TMessage) -> None:
         raise NotImplementedError
 
-    @abstractmethod
-    def dlq_message(self, message: TMessage) -> None:
-        raise NotImplementedError
-
     @classmethod
     def register(
         cls,
@@ -89,7 +85,7 @@ class Queue(Generic[TMessage], ABC):
         return queue_subclass(config=config, context=context)
 
     @staticmethod
-    def parse_message_body(body: str) -> Any:
+    def load_message_body(body: str) -> Any:
         try:
             return loads(body)
         except JSONDecodeError:

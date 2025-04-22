@@ -38,9 +38,6 @@ class MockQueue(Queue[MockMessage]):
     def ack_message(self, message: MockMessage) -> None:
         queue_logger.debug(f"Acknowledged message {message.id}")
 
-    def dlq_message(self, message: MockMessage) -> None:
-        queue_logger.debug(f"Sent message {message.id} to the DLQ")
-
     def _build_json_message(self) -> MockMessage:
         return MockMessage(
             id=str(uuid4()),

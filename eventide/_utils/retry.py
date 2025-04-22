@@ -44,8 +44,6 @@ def handle_failure(
             },
         )
     else:
-        queue.dlq_message(message=message)
-
         worker_logger.warning(
             f"Message {message.id} handling failed with {type(exception).__name__}",
             extra={

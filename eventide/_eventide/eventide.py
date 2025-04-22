@@ -317,7 +317,6 @@ class Eventide:
                     f"No handler found for message {message.id}",
                     extra={"message_id": message.id},
                 )
-                self._queue.dlq_message(message)
 
     def _shutdown(self, force: bool = False) -> None:
         self._shutdown_event.set()

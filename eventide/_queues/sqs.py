@@ -1,5 +1,5 @@
 from multiprocessing.context import ForkContext
-from typing import Any, Optional
+from typing import Any
 
 from pydantic import Field, PositiveInt
 
@@ -15,7 +15,6 @@ class SQSMessage(Message):
 class SQSQueueConfig(QueueConfig):
     region: str
     url: str
-    dlq_url: Optional[str] = None
     visibility_timeout: PositiveInt = Field(30, le=12 * 60 * 60)
     max_number_of_messages: PositiveInt = Field(10, le=10)
 
@@ -52,7 +51,7 @@ class SQSQueue(Queue[SQSMessage]):
         return [
             SQSMessage(
                 id=message["MessageId"],
-                body=self.parse_message_body(message["Body"]),
+                body=self.load_message_body(message["Body"]),
                 receipt_handle=message["ReceiptHandle"],
                 attributes=message["Attributes"],
                 message_attributes=message.get("MessageAttributes") or {},
@@ -64,14 +63,4 @@ class SQSQueue(Queue[SQSMessage]):
         self._sqs_client.delete_message(
             QueueUrl=self._config.url,
             ReceiptHandle=message.receipt_handle,
-        )
-
-    def dlq_message(self, message: SQSMessage) -> None:
-        if not self._config.dlq_url:
-            return
-
-        self._sqs_client.send_message(
-            QueueUrl=self._config.dlq_url,
-            MessageBody=message.body,
-            MessageAttributes=message.message_attributes,
         )

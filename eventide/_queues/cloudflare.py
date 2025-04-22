@@ -52,7 +52,7 @@ class CloudflareQueue(Queue[CloudflareMessage]):
         return [
             CloudflareMessage(
                 id=message["id"],
-                body=self.parse_message_body(message["body"]),
+                body=self.load_message_body(message["body"]),
                 lease_id=message["lease_id"],
                 metadata=message["metadata"],
                 timestamp_ms=message["timestamp_ms"],
@@ -68,9 +68,6 @@ class CloudflareQueue(Queue[CloudflareMessage]):
                 account_id=self._config.account_id,
                 acks=[{"lease_id": message.lease_id}],
             )
-
-    def dlq_message(self, message: CloudflareMessage) -> None:
-        pass
 
     @contextmanager
     def _suppress_httpx_info_logs(self) -> Generator[None, None, None]:
