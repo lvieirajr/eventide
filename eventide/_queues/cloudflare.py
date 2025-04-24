@@ -31,7 +31,10 @@ class CloudflareQueue(Queue[CloudflareMessage]):
         try:
             from cloudflare import Cloudflare
         except ImportError:
-            raise ImportError("Install cloudflare to use CloudflareQueue") from None
+            raise ImportError(
+                "Missing cloudflare dependencies... Install with: pip install "
+                "eventide[cloudflare]"
+            ) from None
 
         super().__init__(config=config, context=context)
 

@@ -27,7 +27,9 @@ class SQSQueue(Queue[SQSMessage]):
         try:
             from boto3 import client
         except ImportError:
-            raise ImportError("Install boto3 to use SQSQueue") from None
+            raise ImportError(
+                "Missing SQS dependencies... Install with: pip install eventide[sqs]"
+            ) from None
 
         super().__init__(config=config, context=context)
 

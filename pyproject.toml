@@ -52,6 +52,9 @@ cloudflare = [
 sqs = [
   "boto3 (>=1.34,<2.0)",
 ]
+watch = [
+  "watchdog (>=5.0,<7.0)",
+]
 
 [dependency-groups]
 dev = [
