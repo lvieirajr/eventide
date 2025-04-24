@@ -13,5 +13,5 @@ def handlers(
         help="App in module:attr format, e.g. main:app",
     ),
 ) -> None:
-    for handler in resolve_app(app).handlers:
+    for handler in resolve_app(app).handler_manager.handlers:
         echo(handler.name)
