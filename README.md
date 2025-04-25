@@ -235,6 +235,10 @@ You can register hooks using decorators on the `app` instance:
 ### Example
 
 ```python
+from eventide import Eventide, EventideConfig, Message
+
+app = Eventide(EventideConfig(...))
+
 @app.on_start
 def boot_log():
     print("Eventide is starting up...")
@@ -254,7 +258,7 @@ def after_success(msg: Message):
 @app.on_handle_failure
 def on_error(msg: Message, exc: Exception):
     print(f"Error handling {msg.id}: {exc}")
-
+```
 
 
 ## Practical Example: Order Processing System
