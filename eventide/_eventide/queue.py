@@ -76,3 +76,5 @@ class QueueManager:
 
         if self.queue.empty:
             self._empty_pulls += 1
+        else:
+            self._empty_pulls = 0

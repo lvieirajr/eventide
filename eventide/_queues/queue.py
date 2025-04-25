@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
 from multiprocessing.context import ForkContext
 from multiprocessing.queues import Queue as MultiprocessingQueue
-from multiprocessing.sharedctypes import Synchronized
 from typing import Any, Callable, ClassVar, Generic, TypeVar
 
 from orjson import JSONDecodeError, loads
@@ -30,28 +29,32 @@ class QueueConfig(PydanticModel):
 
 
 class Queue(Generic[TMessage], ABC):
-    _queue_type_registry: ClassVar[dict[type[QueueConfig], type["Queue[Any]"]]] = {}
+    queue_type_registry: ClassVar[dict[type[QueueConfig], type["Queue[Any]"]]] = {}
 
-    _config: QueueConfig
-    _context: ForkContext
+    config: QueueConfig
+    context: ForkContext
 
-    _message_buffer: MultiprocessingQueue[TMessage]
-    _retry_buffer: MultiprocessingQueue[TMessage]
-
-    _size: Synchronized  # type: ignore[type-arg]
+    message_buffer: MultiprocessingQueue[TMessage]
+    retry_buffer: MultiprocessingQueue[TMessage]
 
     def __init__(self, config: QueueConfig, context: ForkContext) -> None:
-        self._config = config
-        self._context = context
+        self.config = config
+        self.context = context
 
-        self._message_buffer = self._context.Queue(maxsize=self._config.buffer_size)
-        self._retry_buffer = self._context.Queue()
+        self.message_buffer = self.context.Queue(maxsize=self.config.buffer_size)
+        self.retry_buffer = self.context.Queue()
 
-        self._size = self._context.Value("i", 0)
+        self._size = self.context.Value("i", 0)
+
+        self.initialize()
 
     @property
     @abstractmethod
     def max_messages_per_pull(self) -> int:
+        raise NotImplementedError
+
+    @abstractmethod
+    def initialize(self) -> None:
         raise NotImplementedError
 
     @abstractmethod
@@ -68,14 +71,14 @@ class Queue(Generic[TMessage], ABC):
         queue_config_type: type[QueueConfig],
     ) -> Callable[[type["Queue[Any]"]], type["Queue[Any]"]]:
         def inner(queue_subclass: type[Queue[Any]]) -> type[Queue[Any]]:
-            cls._queue_type_registry[queue_config_type] = queue_subclass
+            cls.queue_type_registry[queue_config_type] = queue_subclass
             return queue_subclass
 
         return inner
 
     @classmethod
     def factory(cls, config: QueueConfig, context: ForkContext) -> "Queue[Any]":
-        queue_subclass = cls._queue_type_registry.get(type(config))
+        queue_subclass = cls.queue_type_registry.get(type(config))
 
         if not queue_subclass:
             raise ValueError(
@@ -98,7 +101,7 @@ class Queue(Generic[TMessage], ABC):
 
     @property
     def full(self) -> bool:
-        buffer_size = self._config.buffer_size
+        buffer_size = self.config.buffer_size
 
         if buffer_size == 0:
             return False
@@ -108,7 +111,7 @@ class Queue(Generic[TMessage], ABC):
 
     @property
     def should_pull(self) -> bool:
-        buffer_size = self._config.buffer_size
+        buffer_size = self.config.buffer_size
 
         if buffer_size == 0:
             return True
@@ -117,7 +120,7 @@ class Queue(Generic[TMessage], ABC):
             return bool(buffer_size - self._size.value >= self.max_messages_per_pull)
 
     def get_message(self) -> TMessage:
-        message = self._message_buffer.get_nowait()
+        message = self.message_buffer.get_nowait()
 
         with self._size.get_lock():
             self._size.value -= 1
@@ -126,18 +129,18 @@ class Queue(Generic[TMessage], ABC):
 
     def put_message(self, message: TMessage) -> None:
         with self._size.get_lock():
-            self._message_buffer.put_nowait(message)
+            self.message_buffer.put_nowait(message)
             self._size.value += 1
 
     def get_retry_message(self) -> TMessage:
-        return self._retry_buffer.get_nowait()
+        return self.retry_buffer.get_nowait()
 
     def put_retry_message(self, message: TMessage) -> None:
-        self._retry_buffer.put_nowait(message)
+        self.retry_buffer.put_nowait(message)
 
     def shutdown(self) -> None:
-        self._message_buffer.close()
-        self._message_buffer.cancel_join_thread()
+        self.message_buffer.close()
+        self.message_buffer.cancel_join_thread()
 
-        self._retry_buffer.close()
-        self._retry_buffer.cancel_join_thread()
+        self.retry_buffer.close()
+        self.retry_buffer.cancel_join_thread()

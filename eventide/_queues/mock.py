@@ -19,14 +19,17 @@ class MockQueueConfig(QueueConfig):
 
 @Queue.register(MockQueueConfig)
 class MockQueue(Queue[MockMessage]):
-    _config: MockQueueConfig
+    config: MockQueueConfig
 
     @property
     def max_messages_per_pull(self) -> int:
-        return self._config.max_messages
+        return self.config.max_messages
+
+    def initialize(self) -> None:
+        pass
 
     def pull_messages(self) -> list[MockMessage]:
-        message_count = randint(self._config.min_messages, self._config.max_messages)
+        message_count = randint(self.config.min_messages, self.config.max_messages)
 
         queue_logger.debug(f"Pulled {message_count} messages from Mock Queue")
 

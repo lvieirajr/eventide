@@ -12,8 +12,8 @@ MatcherCallable = Callable[[dict[str, Any]], bool]
 
 
 class HandlerMatcher:
-    _matchers: list[MatcherCallable]
-    _operator: Callable[[Iterable[bool]], bool]
+    matchers: list[MatcherCallable]
+    operator: Callable[[Iterable[bool]], bool]
 
     def __init__(
         self,
@@ -23,14 +23,14 @@ class HandlerMatcher:
         if not matchers:
             raise ValueError("At least one matcher must be provided")
 
-        self._matchers = [self._prepare_matchers(matcher) for matcher in matchers]
-        self._operator = operator
+        self.matchers = [self._prepare_matchers(matcher) for matcher in matchers]
+        self.operator = operator
 
     def __call__(self, message: "Message") -> bool:
         message_dict = message.model_dump()
 
-        return self._operator(
-            self._match(matcher, message_dict) for matcher in self._matchers
+        return self.operator(
+            self._match(matcher, message_dict) for matcher in self.matchers
         )
 
     def _prepare_matchers(

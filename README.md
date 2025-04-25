@@ -1,6 +1,7 @@
 # Eventide
 [![PyPI version](https://img.shields.io/pypi/v/eventide?style=flat-square)](https://pypi.org/project/eventide)
 [![Python Versions](https://img.shields.io/badge/python-3.9%20%7C%203.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue)](https://pypi.org/project/eventide/)
+[![CI](https://github.com/lvieirajr/eventide/workflows/CI/badge.svg)](https://github.com/lvieirajr/eventide/actions/workflows/ci.yaml)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 A fast, simple, and extensible queue worker framework for Python.
@@ -38,6 +39,9 @@ pip install eventide[sqs]
 
 # With Cloudflare Queues support:
 pip install eventide[cloudflare]
+
+# With autoreload support (for development):
+pip install eventide[watch]
 ```
 
 ## Quick Start
@@ -144,9 +148,9 @@ from eventide import CloudflareQueueConfig
 cf_config = CloudflareQueueConfig(
     account_id="my-account-id",
     queue_id="my-queue-id",
-    buffer_size=100,  # internal buffer size
     batch_size=10,  # max messages to fetch
     visibility_timeout_ms=30000,  # milliseconds
+    buffer_size=100,  # internal buffer size
 )
 ```
 
@@ -185,7 +189,7 @@ JMESPath is a query language for JSON that allows you to extract and transform e
 You can combine multiple JMESPath expressions with logical operators:
 
 ```python
-from eventide import Eventide, EventideConfig
+from eventide import Eventide, EventideConfig, Message
 
 app = Eventide(EventideConfig(...))
 
@@ -195,7 +199,7 @@ app = Eventide(EventideConfig(...))
     "body.priority == 'high'",
     operator=all
 )
-def priority_notifications_handler(_message):
+def priority_notifications_handler(message: Message):
   pass
 
 # Match messages that satisfy ANY condition
@@ -204,7 +208,7 @@ def priority_notifications_handler(_message):
     "body.type == 'sms'",
     operator=any
 )
-def email_or_sms_handler(_message):
+def email_or_sms_handler(message: Message):
   pass
 
 ```
@@ -217,7 +221,7 @@ Here's a complete example of using Eventide to build an order processing system:
 
 ```python
 # app.py
-from eventide import Eventide, EventideConfig, SQSQueueConfig
+from eventide import Eventide, EventideConfig, Message, SQSQueueConfig
 
 app = Eventide(
     config=EventideConfig(
@@ -234,7 +238,7 @@ app = Eventide(
 
 # Define handlers for different message types
 @app.handler("body.type == 'new_order'")
-def process_new_order(message):
+def process_new_order(message: Message):
     order = message.body.get('order', {})
     order_id = order.get('id')
     print(f"Processing new order: {order_id}")
@@ -242,7 +246,7 @@ def process_new_order(message):
     return True
 
 @app.handler("body.type == 'payment_confirmed'")
-def process_payment(message):
+def process_payment(message: Message):
     order_id = message.body.get('order_id')
     amount = message.body.get('amount')
     print(f"Payment of ${amount} confirmed for order: {order_id}")
@@ -265,10 +269,13 @@ To run this application:
 
 ```bash
 # Install dependencies
-pip install eventide[sqs]
+pip install eventide[sqs,watch]
 
 # Run the application
 eventide run -a app:app
+
+# Run the application with autoreload (for development)
+eventide watch -a app:app
 ```
 
 This example demonstrates how to:

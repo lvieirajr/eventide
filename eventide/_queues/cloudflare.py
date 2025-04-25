@@ -1,7 +1,6 @@
 from collections.abc import Generator
 from contextlib import contextmanager
 from logging import getLogger
-from multiprocessing.context import ForkContext
 from typing import Any, Optional
 
 from pydantic import Field, PositiveInt
@@ -25,9 +24,13 @@ class CloudflareQueueConfig(QueueConfig):
 
 @Queue.register(CloudflareQueueConfig)
 class CloudflareQueue(Queue[CloudflareMessage]):
-    _config: CloudflareQueueConfig
+    config: CloudflareQueueConfig
 
-    def __init__(self, config: CloudflareQueueConfig, context: ForkContext) -> None:
+    @property
+    def max_messages_per_pull(self) -> int:
+        return self.config.batch_size
+
+    def initialize(self) -> None:
         try:
             from cloudflare import Cloudflare
         except ImportError:
@@ -36,19 +39,13 @@ class CloudflareQueue(Queue[CloudflareMessage]):
                 "eventide[cloudflare]"
             ) from None
 
-        super().__init__(config=config, context=context)
-
-        self._cloudflare_client = Cloudflare()
-
-    @property
-    def max_messages_per_pull(self) -> int:
-        return self._config.batch_size
+        self.cloudflare_client = Cloudflare()
 
     def pull_messages(self) -> list[CloudflareMessage]:
         with self._suppress_httpx_info_logs():
-            response = self._cloudflare_client.queues.messages.pull(
-                self._config.queue_id,
-                account_id=self._config.account_id,
+            response = self.cloudflare_client.queues.messages.pull(
+                self.config.queue_id,
+                account_id=self.config.account_id,
                 batch_size=self.max_messages_per_pull,
             )
 
@@ -66,9 +63,9 @@ class CloudflareQueue(Queue[CloudflareMessage]):
 
     def ack_message(self, message: CloudflareMessage) -> None:
         with self._suppress_httpx_info_logs():
-            self._cloudflare_client.queues.messages.ack(
-                self._config.queue_id,
-                account_id=self._config.account_id,
+            self.cloudflare_client.queues.messages.ack(
+                self.config.queue_id,
+                account_id=self.config.account_id,
                 acks=[{"lease_id": message.lease_id}],
             )
 

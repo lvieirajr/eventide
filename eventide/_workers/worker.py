@@ -18,10 +18,12 @@ class HeartBeat(PydanticModel):
 
 
 class Worker:
-    _worker_id: int
-    _queue: Queue[Message]
-    _shutdown: MultiprocessingEvent
-    _heartbeats: MultiprocessingQueue[HeartBeat]
+    worker_id: int
+
+    queue: Queue[Message]
+
+    shutdown: MultiprocessingEvent
+    heartbeats: MultiprocessingQueue[HeartBeat]
 
     def __init__(
         self,
@@ -30,13 +32,13 @@ class Worker:
         shutdown_event: MultiprocessingEvent,
         heartbeats: MultiprocessingQueue[HeartBeat],
     ) -> None:
-        self._worker_id = worker_id
-        self._queue = queue
-        self._shutdown_event = shutdown_event
-        self._heartbeats = heartbeats
+        self.worker_id = worker_id
+        self.queue = queue
+        self.shutdown_event = shutdown_event
+        self.heartbeats = heartbeats
 
     def run(self) -> None:
-        while not self._shutdown_event.is_set():
+        while not self.shutdown_event.is_set():
             message = self._get_message()
 
             if message:
@@ -60,7 +62,7 @@ class Worker:
                     except Exception as exception:
                         end = time()
                         self._heartbeat(None)
-                        handle_failure(message, self._queue, exception)
+                        handle_failure(message, self.queue, exception)
 
                         if (
                             isinstance(exception, TimeoutError)
@@ -71,7 +73,7 @@ class Worker:
                         end = time()
 
                         self._heartbeat(None)
-                        self._queue.ack_message(message)
+                        self.queue.ack_message(message)
 
                         worker_logger.info(
                             f"Message {message.id} handling succeeded in "
@@ -83,14 +85,14 @@ class Worker:
 
     def _get_message(self) -> Optional[Message]:
         try:
-            return self._queue.get_message()
+            return self.queue.get_message()
         except (Empty, ShutDown):
             return None
 
     def _heartbeat(self, message: Optional[Message] = None) -> None:
         try:
-            self._heartbeats.put_nowait(
-                HeartBeat(worker_id=self._worker_id, timestamp=time(), message=message),
+            self.heartbeats.put_nowait(
+                HeartBeat(worker_id=self.worker_id, timestamp=time(), message=message),
             )
         except (Empty, ShutDown):
             pass

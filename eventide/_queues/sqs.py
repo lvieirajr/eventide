@@ -1,4 +1,3 @@
-from multiprocessing.context import ForkContext
 from typing import Any
 
 from pydantic import Field, PositiveInt
@@ -15,15 +14,15 @@ class SQSMessage(Message):
 class SQSQueueConfig(QueueConfig):
     region: str
     url: str
-    visibility_timeout: PositiveInt = Field(30, le=12 * 60 * 60)
     max_number_of_messages: PositiveInt = Field(10, le=10)
+    visibility_timeout: PositiveInt = Field(30, le=12 * 60 * 60)
 
 
 @Queue.register(SQSQueueConfig)
 class SQSQueue(Queue[SQSMessage]):
-    _config: SQSQueueConfig
+    config: SQSQueueConfig
 
-    def __init__(self, config: SQSQueueConfig, context: ForkContext) -> None:
+    def initialize(self) -> None:
         try:
             from boto3 import client
         except ImportError:
@@ -31,20 +30,18 @@ class SQSQueue(Queue[SQSMessage]):
                 "Missing SQS dependencies... Install with: pip install eventide[sqs]"
             ) from None
 
-        super().__init__(config=config, context=context)
-
-        self._sqs_client = client("sqs", region_name=self._config.region)
+        self.sqs_client = client("sqs", region_name=self.config.region)
 
     @property
     def max_messages_per_pull(self) -> int:
-        return self._config.max_number_of_messages
+        return self.config.max_number_of_messages
 
     def pull_messages(self) -> list[SQSMessage]:
-        response = self._sqs_client.receive_message(
-            QueueUrl=self._config.url,
+        response = self.sqs_client.receive_message(
+            QueueUrl=self.config.url,
             MaxNumberOfMessages=self.max_messages_per_pull,
             WaitTimeSeconds=1,
-            VisibilityTimeout=self._config.visibility_timeout,
+            VisibilityTimeout=self.config.visibility_timeout,
             AttributeNames=["All"],
             MessageAttributeNames=["All"],
             MessageSystemAttributeNames=["All"],
@@ -62,7 +59,7 @@ class SQSQueue(Queue[SQSMessage]):
         ]
 
     def ack_message(self, message: SQSMessage) -> None:
-        self._sqs_client.delete_message(
-            QueueUrl=self._config.url,
+        self.sqs_client.delete_message(
+            QueueUrl=self.config.url,
             ReceiptHandle=message.receipt_handle,
         )
