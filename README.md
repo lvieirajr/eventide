@@ -321,7 +321,7 @@ pip install eventide[sqs,watch]
 eventide run -a app:app
 
 # Run the application with autoreload (for development)
-eventide watch -a app:app
+eventide run -a app:app --reload
 ```
 
 This example demonstrates how to:
@@ -332,8 +332,8 @@ This example demonstrates how to:
 
 ## Roadmap
 
-- [ ] Comprehensive test suite
 - [ ] Message scheduling (cron and one-off)
+- [ ] Comprehensive test suite
 
 ## License
 
