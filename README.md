@@ -1,7 +1,7 @@
 # Eventide
 [![PyPI version](https://img.shields.io/pypi/v/eventide?style=flat-square)](https://pypi.org/project/eventide)
 [![Python Versions](https://img.shields.io/badge/python-3.9%20%7C%203.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue)](https://pypi.org/project/eventide/)
-[![CI](https://github.com/lvieirajr/eventide/workflows/CI/badge.svg)](https://github.com/lvieirajr/eventide/actions/workflows/ci.yaml)
+[![CI](https://github.com/lvieirajr/eventide/workflows/CI/badge.svg)](https://github.com/lvieirajr/eventide/actions/workflows/CI.yaml)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 A fast, simple, and extensible queue worker framework for Python.
@@ -215,6 +215,48 @@ def email_or_sms_handler(message: Message):
 
 This approach gives you fine-grained control over which messages are routed to which handlers, allowing for clean separation of concerns in your application.
 
+
+## Lifecycle Hooks
+
+Eventide supports user-defined lifecycle hooks to let you tap into key moments during your app’s runtime. These hooks are ideal for tasks like logging, resource initialization, metrics, or graceful shutdown logic.
+
+You can register hooks using decorators on the `app` instance:
+
+### Available Hooks
+
+| Hook | Description |
+|------|-------------|
+| `@app.on_start` | Runs once before the queue and workers start |
+| `@app.on_shutdown` | Runs once when the app is shutting down |
+| `@app.on_handle_message` | Runs before a message is handled |
+| `@app.on_handle_success` | Runs after a message is successfully handled |
+| `@app.on_handle_failure` | Runs when a message handler raises an exception |
+
+### Example
+
+```python
+@app.on_start
+def boot_log():
+    print("Eventide is starting up...")
+
+@app.on_shutdown
+def shutdown_log():
+    print("Eventide is shutting down...")
+
+@app.on_handle_message
+def before_handle(msg: Message):
+    print(f"About to handle: {msg.id}")
+
+@app.on_handle_success
+def after_success(msg: Message):
+    print(f"Successfully handled: {msg.id}")
+
+@app.on_handle_failure
+def on_error(msg: Message, exc: Exception):
+    print(f"Error handling {msg.id}: {exc}")
+
+
+
 ## Practical Example: Order Processing System
 
 Here's a complete example of using Eventide to build an order processing system:
@@ -286,7 +328,6 @@ This example demonstrates how to:
 
 ## Roadmap
 
-- [ ] Lifecycle hooks
 - [ ] Comprehensive test suite
 - [ ] Message scheduling (cron and one-off)
 

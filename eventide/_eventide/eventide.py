@@ -7,9 +7,11 @@ from types import FrameType
 from typing import Callable, Optional
 
 from .._handlers import Handler
+from .._queues import Message
 from .._utils.logging import eventide_logger
 from .config import EventideConfig
 from .handler import HandlerManager
+from .hook import HookManager
 from .queue import QueueManager
 from .worker import WorkerManager
 
@@ -20,6 +22,7 @@ class Eventide:
     context: ForkContext
 
     handler_manager: HandlerManager
+    hook_manager: HookManager
     queue_manager: QueueManager
     worker_manager: WorkerManager
 
@@ -29,6 +32,7 @@ class Eventide:
         self.context = get_context("fork")
 
         self.handler_manager = HandlerManager(config=self.config)
+        self.hook_manager = HookManager()
         self.queue_manager = QueueManager(
             config=self.config,
             context=self.context,
@@ -37,6 +41,7 @@ class Eventide:
         self.worker_manager = WorkerManager(
             config=self.config,
             context=self.context,
+            hook_manager=self.hook_manager,
             queue_manager=self.queue_manager,
         )
 
@@ -44,10 +49,41 @@ class Eventide:
     def handler(self) -> Callable[..., Callable[..., Handler]]:
         return self.handler_manager.handler
 
+    def on_start(self, hook: Callable[[], None]) -> Callable[[], None]:
+        self.hook_manager.register_start_hook(hook)
+        return hook
+
+    def on_shutdown(self, hook: Callable[[], None]) -> Callable[[], None]:
+        self.hook_manager.register_shutdown_hook(hook)
+        return hook
+
+    def on_message_received(
+        self,
+        hook: Callable[[Message], None],
+    ) -> Callable[[Message], None]:
+        self.hook_manager.register_message_received_hook(hook)
+        return hook
+
+    def on_message_success(
+        self,
+        hook: Callable[[Message], None],
+    ) -> Callable[[Message], None]:
+        self.hook_manager.register_message_success_hook(hook)
+        return hook
+
+    def on_message_failure(
+        self,
+        hook: Callable[[Message, Exception], None],
+    ) -> Callable[[Message, Exception], None]:
+        self.hook_manager.register_message_failure_hook(hook)
+        return hook
+
     def run(self) -> None:
         eventide_logger.info("Starting Eventide...")
 
         self.setup_signal_handlers()
+
+        self.hook_manager.on_start()
 
         self.queue_manager.start()
         self.worker_manager.start()
@@ -83,3 +119,5 @@ class Eventide:
     def shutdown(self, force: bool = False) -> None:
         self.worker_manager.shutdown(force=force)
         self.queue_manager.shutdown()
+
+        self.hook_manager.on_shutdown()

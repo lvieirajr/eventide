@@ -15,11 +15,14 @@ from .config import EventideConfig
 class HandlerManager:
     config: EventideConfig
 
+    _handlers: set[Handler]
+    _discovered: bool
+
     def __init__(self, config: EventideConfig) -> None:
         self.config = config
 
-        self._handlers: set[Handler] = set()
-        self._discovered: bool = False
+        self._handlers = set()
+        self._discovered = False
 
     @property
     def handlers(self) -> set[Handler]:

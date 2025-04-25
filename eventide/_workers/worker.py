@@ -3,7 +3,7 @@ from multiprocessing.queues import Queue as MultiprocessingQueue
 from multiprocessing.synchronize import Event as MultiprocessingEvent
 from queue import Empty, ShutDown
 from time import sleep, time
-from typing import Optional
+from typing import Callable, Optional
 
 from .._queues import Message, Queue
 from .._utils.logging import worker_logger
@@ -25,17 +25,30 @@ class Worker:
     shutdown: MultiprocessingEvent
     heartbeats: MultiprocessingQueue[HeartBeat]
 
+    on_message_received: Callable[[Message], None]
+    on_message_success: Callable[[Message], None]
+    on_message_failure: Callable[[Message, Exception], None]
+
     def __init__(
         self,
         worker_id: int,
         queue: Queue[Message],
         shutdown_event: MultiprocessingEvent,
         heartbeats: MultiprocessingQueue[HeartBeat],
+        on_message_received: Callable[[Message], None],
+        on_message_success: Callable[[Message], None],
+        on_message_failure: Callable[[Message, Exception], None],
     ) -> None:
         self.worker_id = worker_id
+
         self.queue = queue
+
         self.shutdown_event = shutdown_event
         self.heartbeats = heartbeats
+
+        self.on_message_received = on_message_received
+        self.on_message_success = on_message_success
+        self.on_message_failure = on_message_failure
 
     def run(self) -> None:
         while not self.shutdown_event.is_set():
@@ -43,6 +56,7 @@ class Worker:
 
             if message:
                 self._heartbeat(message)
+                self.on_message_received(message)
 
                 log_extra = {
                     "message_id": message.id,
@@ -61,8 +75,10 @@ class Worker:
                         future.result(timeout=handler.timeout)
                     except Exception as exception:
                         end = time()
+
                         self._heartbeat(None)
                         handle_failure(message, self.queue, exception)
+                        self.on_message_failure(message, exception)
 
                         if (
                             isinstance(exception, TimeoutError)
@@ -74,6 +90,7 @@ class Worker:
 
                         self._heartbeat(None)
                         self.queue.ack_message(message)
+                        self.on_message_success(message)
 
                         worker_logger.info(
                             f"Message {message.id} handling succeeded in "

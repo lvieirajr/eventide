@@ -8,8 +8,6 @@ if TYPE_CHECKING:
 
 @runtime_checkable
 class Handler(Protocol):
-    def __call__(self, message: "Message") -> Any: ...
-
     name: str
     matcher: HandlerMatcher
     timeout: float
@@ -17,3 +15,5 @@ class Handler(Protocol):
     retry_limit: int
     retry_min_backoff: float
     retry_max_backoff: float
+
+    def __call__(self, message: "Message") -> Any: ...

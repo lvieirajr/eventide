@@ -12,6 +12,7 @@ from .._utils.pydantic import PydanticModel
 from .._utils.retry import handle_failure
 from .._workers import HeartBeat, Worker
 from .config import EventideConfig
+from .hook import HookManager
 from .queue import QueueManager
 
 
@@ -36,11 +37,13 @@ class WorkerManager:
         self,
         config: EventideConfig,
         context: ForkContext,
+        hook_manager: HookManager,
         queue_manager: QueueManager,
     ) -> None:
         self.config = config
         self.context = context
 
+        self.hook_manager = hook_manager
         self.queue_manager = queue_manager
 
     @property
@@ -114,6 +117,9 @@ class WorkerManager:
                 queue=self.queue_manager.queue,
                 shutdown_event=self._shutdown_event,
                 heartbeats=self._heartbeats,
+                on_message_received=self.hook_manager.on_message_received,
+                on_message_success=self.hook_manager.on_message_success,
+                on_message_failure=self.hook_manager.on_message_failure,
             ).run()
 
         self._workers[worker_id] = WorkerState(

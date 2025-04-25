@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from multiprocessing.context import ForkContext
 from multiprocessing.queues import Queue as MultiprocessingQueue
+from multiprocessing.sharedctypes import Synchronized
 from typing import Any, Callable, ClassVar, Generic, TypeVar
 
 from orjson import JSONDecodeError, loads
@@ -36,6 +37,8 @@ class Queue(Generic[TMessage], ABC):
 
     message_buffer: MultiprocessingQueue[TMessage]
     retry_buffer: MultiprocessingQueue[TMessage]
+
+    _size: Synchronized  # type: ignore[type-arg]
 
     def __init__(self, config: QueueConfig, context: ForkContext) -> None:
         self.config = config

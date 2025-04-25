@@ -16,6 +16,8 @@ class QueueManager:
 
     queue: Queue[Message]
 
+    _empty_pulls: int
+
     def __init__(
         self,
         config: EventideConfig,
@@ -26,8 +28,6 @@ class QueueManager:
         self.context = context
 
         self.handler_manager = handler_manager
-
-        self._empty_pulls = 0
 
     @property
     def pull_interval(self) -> float:
@@ -40,9 +40,11 @@ class QueueManager:
 
     def start(self) -> None:
         self.queue = Queue.factory(config=self.config.queue, context=self.context)
+        self._empty_pulls = 0
 
     def shutdown(self) -> None:
         self.queue.shutdown()
+        self._empty_pulls = 0
 
     def enqueue_retries(self) -> None:
         messages = []
