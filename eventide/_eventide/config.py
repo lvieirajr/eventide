@@ -14,8 +14,6 @@ class EventideConfig(BaseSettings):
         validate_default=False,
     )
 
-    handler_paths: list[str] = Field(default_factory=lambda: ["."])
-
     queue: QueueConfig
 
     min_pull_interval: PositiveFloat = 1.0

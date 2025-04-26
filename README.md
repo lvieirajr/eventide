@@ -86,7 +86,6 @@ config = EventideConfig(
     retry_limit=5,  # Max retries per message
     retry_min_backoff=1.0,  # Min backoff in seconds
     retry_max_backoff=60.0, # Max backoff in seconds
-    handler_paths=["myapp/handlers"],  # Auto-discover handler modules
 )
 ```
 

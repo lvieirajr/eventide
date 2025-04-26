@@ -26,10 +26,10 @@ class WorkerState(PydanticModel):
 class WorkerManager:
     config: EventideConfig
     context: ForkContext
+    shutdown_event: MultiprocessingEvent
 
     queue_manager: QueueManager
 
-    _shutdown_event: MultiprocessingEvent
     _heartbeats: MultiprocessingQueue[HeartBeat]
     _workers: dict[int, WorkerState]
 
@@ -37,33 +37,25 @@ class WorkerManager:
         self,
         config: EventideConfig,
         context: ForkContext,
+        shutdown_event: MultiprocessingEvent,
         hook_manager: HookManager,
         queue_manager: QueueManager,
     ) -> None:
         self.config = config
         self.context = context
+        self.shutdown_event = shutdown_event
 
         self.hook_manager = hook_manager
         self.queue_manager = queue_manager
 
-    @property
-    def is_shutdown(self) -> bool:
-        return self._shutdown_event.is_set()
-
     def start(self) -> None:
-        self._shutdown_event = self.context.Event()
         self._heartbeats = self.context.Queue()
 
         self._workers = {}
         for worker_id in range(1, self.config.concurrency + 1):
             self.spawn_worker(worker_id=worker_id)
 
-    def send_shutdown_event(self) -> None:
-        self._shutdown_event.set()
-
     def shutdown(self, force: bool = False) -> None:
-        self.send_shutdown_event()
-
         if not force:
             while self._workers:
                 self.monitor_workers()
@@ -92,7 +84,7 @@ class WorkerManager:
             if not worker_state.process.is_alive():
                 self.kill_worker(worker_id=worker_id)
 
-                if not self.is_shutdown:
+                if not self.shutdown_event.is_set():
                     self.spawn_worker(worker_id=worker_id)
 
                 if worker_state.message:
@@ -115,7 +107,7 @@ class WorkerManager:
             Worker(
                 worker_id=worker_id,
                 queue=self.queue_manager.queue,
-                shutdown_event=self._shutdown_event,
+                shutdown_event=self.shutdown_event,
                 heartbeats=self._heartbeats,
                 on_message_received=self.hook_manager.on_message_received,
                 on_message_success=self.hook_manager.on_message_success,
