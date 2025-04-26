@@ -1,6 +1,6 @@
 [project]
 name = "eventide"
-version = "0.0.0a12"
+version = "0.0.0a13"
 description = "Fast and simple queue workers"
 readme = "README.md"
 license = "Apache-2.0"
@@ -58,6 +58,10 @@ sqs = [
 ]
 watch = [
   "watchdog (>=5.0,<7.0)",
+]
+core = [
+  "eventide[cron]",
+  "eventide[watch]",
 ]
 
 [dependency-groups]

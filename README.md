@@ -34,14 +34,14 @@ All configuration is done via Pydantic models, ensuring type safety and validati
 ```bash
 pip install eventide
 
-# With SQS support:
-pip install eventide[sqs]
+# Queue options:
+pip install eventide[sqs]  # For AWS SQS support
+pip install eventide[cloudflare]  # For Cloudflare Queues support
 
-# With Cloudflare Queues support:
-pip install eventide[cloudflare]
-
-# With autoreload support (for development):
-pip install eventide[watch]
+# Features:
+pip install eventide[cron]  # For cron scheduling
+pip install eventide[watch]  # For autoreload during development
+pip install eventide[core]  # For enabling all the features above
 ```
 
 ## Quick Start

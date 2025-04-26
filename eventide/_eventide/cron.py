@@ -2,8 +2,6 @@ from datetime import datetime, timedelta, timezone
 from traceback import format_tb
 from typing import Any, Callable
 
-from croniter import croniter
-
 from .._utils.logging import cron_logger
 from .._utils.pydantic import BaseModel
 from .queue import QueueManager
@@ -20,6 +18,13 @@ class CronManager:
     _last_evaluation: datetime
 
     def __init__(self, queue_manager: QueueManager) -> None:
+        try:
+            from croniter import croniter  # noqa: F401
+        except ImportError:
+            raise ImportError(
+                "Missing cron dependencies... Install with: pip install eventide[cron]"
+            ) from None
+
         self.crons = {}
         self.queue_manager = queue_manager
         self._last_evaluation = datetime.now(tz=timezone.utc).replace(
@@ -42,6 +47,8 @@ class CronManager:
         return wrapper
 
     def evaluate_crons(self) -> None:
+        from croniter import croniter
+
         now = datetime.now(tz=timezone.utc).replace(microsecond=0)
 
         second = self._last_evaluation + timedelta(seconds=1)

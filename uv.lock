@@ -167,7 +167,7 @@ wheels = [
 
 [[package]]
 name = "eventide"
-version = "0.0.0a12"
+version = "0.0.0a13"
 source = { editable = "." }
 dependencies = [
     { name = "jmespath" },
@@ -180,6 +180,10 @@ dependencies = [
 [package.optional-dependencies]
 cloudflare = [
     { name = "cloudflare" },
+]
+core = [
+    { name = "croniter" },
+    { name = "watchdog" },
 ]
 cron = [
     { name = "croniter" },
@@ -208,6 +212,8 @@ requires-dist = [
     { name = "boto3", marker = "extra == 'sqs'", specifier = ">=1.34,<2.0" },
     { name = "cloudflare", marker = "extra == 'cloudflare'", specifier = ">=3.0,<5.0" },
     { name = "croniter", marker = "extra == 'cron'", specifier = ">=6.0,<7.0" },
+    { name = "eventide", extras = ["cron"], marker = "extra == 'core'" },
+    { name = "eventide", extras = ["watch"], marker = "extra == 'core'" },
     { name = "jmespath", specifier = ">=1.0,<2.0" },
     { name = "orjson", specifier = ">=3.10,<4.0" },
     { name = "pydantic", specifier = ">=2.7,<3.0" },
@@ -215,7 +221,7 @@ requires-dist = [
     { name = "typer", specifier = ">=0.12,<0.16" },
     { name = "watchdog", marker = "extra == 'watch'", specifier = ">=5.0,<7.0" },
 ]
-provides-extras = ["cloudflare", "cron", "sqs", "watch"]
+provides-extras = ["cloudflare", "cron", "sqs", "watch", "core"]
 
 [package.metadata.requires-dev]
 dev = [

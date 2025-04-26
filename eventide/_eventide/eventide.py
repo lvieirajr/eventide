@@ -31,6 +31,7 @@ class Eventide:
     hook_manager: HookManager
     queue_manager: QueueManager
     worker_manager: WorkerManager
+    cron_manager: CronManager
 
     def __init__(self, config: EventideConfig) -> None:
         self.config = config
@@ -38,8 +39,8 @@ class Eventide:
         self.context = get_context("fork")
         self.shutdown_event = self.context.Event()
 
-        self.handler_manager = HandlerManager(config=self.config)
         self.hook_manager = HookManager()
+        self.handler_manager = HandlerManager(config=self.config)
         self.queue_manager = QueueManager(
             config=self.config,
             context=self.context,
@@ -53,8 +54,6 @@ class Eventide:
             queue_manager=self.queue_manager,
         )
         self.cron_manager = CronManager(queue_manager=self.queue_manager)
-
-        self.autodiscover()
 
     @property
     def handler(self) -> Callable[..., Callable[..., Handler]]:
@@ -96,9 +95,10 @@ class Eventide:
     def run(self) -> None:
         eventide_logger.info("Starting Eventide...")
 
+        self.autodiscover()
+
         self.shutdown_event.clear()
         self.setup_signal_handlers()
-        self.autodiscover()
         self.hook_manager.on_start()
         self.queue_manager.start()
         self.worker_manager.start()
@@ -121,6 +121,8 @@ class Eventide:
 
     def run_cron(self) -> None:
         eventide_logger.info("Starting Eventide cron...")
+
+        self.autodiscover()
 
         self.shutdown_event.clear()
         self.setup_signal_handlers()
@@ -146,7 +148,16 @@ class Eventide:
         signal(SIGINT, handle_signal)
         signal(SIGTERM, handle_signal)
 
-    def autodiscover(self) -> None:
+    def shutdown(self, force: bool = False) -> None:
+        self.shutdown_event.set()
+
+        self.worker_manager.shutdown(force=force)
+        self.queue_manager.shutdown()
+
+        self.hook_manager.on_shutdown()
+
+    @staticmethod
+    def autodiscover() -> None:
         cwd = Path(".").resolve()
         ignored_dirs = {".git", ".venv", "venv", "__pycache__"}
 
@@ -177,11 +188,3 @@ class Eventide:
         for child in cwd.iterdir():
             if child.is_dir() and child.name not in ignored_dirs:
                 import_from_directory(child)
-
-    def shutdown(self, force: bool = False) -> None:
-        self.shutdown_event.set()
-
-        self.worker_manager.shutdown(force=force)
-        self.queue_manager.shutdown()
-
-        self.hook_manager.on_shutdown()
