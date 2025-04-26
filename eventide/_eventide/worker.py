@@ -3,7 +3,7 @@ from multiprocessing.queues import Queue as MultiprocessingQueue
 from multiprocessing.synchronize import Event as MultiprocessingEvent
 from queue import Empty
 from signal import SIG_IGN, SIGINT, SIGTERM, signal
-from time import sleep, time
+from time import time
 from typing import Optional
 
 from .._exceptions import WorkerCrashedError
@@ -56,15 +56,17 @@ class WorkerManager:
             self.spawn_worker(worker_id=worker_id)
 
     def shutdown(self, force: bool = False) -> None:
-        if not force:
-            while self._workers:
-                self.monitor_workers()
+        if hasattr(self, "_workers"):
+            if not force:
+                while self._workers:
+                    self.monitor_workers()
 
-        for worker_id in list(self._workers.keys()):
-            self.kill_worker(worker_id=worker_id)
+            for worker_id in list(self._workers.keys()):
+                self.kill_worker(worker_id=worker_id)
 
-        self._heartbeats.close()
-        self._heartbeats.cancel_join_thread()
+        if hasattr(self, "_heartbeats"):
+            self._heartbeats.close()
+            self._heartbeats.cancel_join_thread()
 
     def monitor_workers(self) -> None:
         while True:
@@ -96,8 +98,6 @@ class WorkerManager:
                             f"{worker_state.message.id}",
                         ),
                     )
-
-        sleep(0.1)
 
     def spawn_worker(self, worker_id: int) -> None:
         def worker_process() -> None:

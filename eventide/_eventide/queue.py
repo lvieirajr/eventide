@@ -43,8 +43,8 @@ class QueueManager:
         self._empty_pulls = 0
 
     def shutdown(self) -> None:
-        self.queue.shutdown()
-        self._empty_pulls = 0
+        if hasattr(self, "queue"):
+            self.queue.shutdown()
 
     def enqueue_retries(self) -> None:
         messages = []

@@ -97,7 +97,7 @@ ruff:  ##@Ruff Runs both the Ruff linter and formatter on the project
 mypy:  ##@Mypy Runs the MyPy static type checker on the project
 	@echo "Running mypy..."
 	@dmypy status > /dev/null 2>&1 || dmypy start
-	@dmypy run -- ./
+	@dmypy run -- ./ --install-types --non-interactive
 
 
 # ======================================================================================

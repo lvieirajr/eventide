@@ -41,6 +41,11 @@ class CloudflareQueue(Queue[CloudflareMessage]):
 
         self.cloudflare_client = Cloudflare()
 
+    def send_message(self, body: Any) -> None:
+        # TODO: Seems like cloudflare does not support sending messages at the moment
+        # with their SDK
+        pass
+
     def pull_messages(self) -> list[CloudflareMessage]:
         with self._suppress_httpx_info_logs():
             response = self.cloudflare_client.queues.messages.pull(

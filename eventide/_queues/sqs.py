@@ -36,6 +36,12 @@ class SQSQueue(Queue[SQSMessage]):
     def max_messages_per_pull(self) -> int:
         return self.config.max_number_of_messages
 
+    def send_message(self, body: Any) -> None:
+        self.sqs_client.send_message(
+            QueueUrl=self.config.url,
+            MessageBody=self.dump_message_body(body),
+        )
+
     def pull_messages(self) -> list[SQSMessage]:
         response = self.sqs_client.receive_message(
             QueueUrl=self.config.url,

@@ -6,7 +6,7 @@ from pathlib import Path
 from signal import SIGINT, SIGTERM, signal
 from sys import exit as sys_exit
 from sys import path
-from time import time
+from time import sleep, time
 from types import FrameType
 from typing import Any, Callable, Optional
 
@@ -113,6 +113,7 @@ class Eventide:
                 and not self.worker_manager.shutdown_event.is_set()
             ):
                 self.worker_manager.monitor_workers()
+                sleep(0.1)
 
         eventide_logger.info("Stopping Eventide...")
 
@@ -127,7 +128,8 @@ class Eventide:
         self.queue_manager.start()
 
         while not self.shutdown_event.is_set():
-            pass
+            self.cron_manager.evaluate_crons()
+            sleep(1.0)
 
         self.shutdown(force=False)
 

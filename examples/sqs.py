@@ -2,6 +2,7 @@ from logging import INFO, basicConfig
 from os import environ
 from random import uniform
 from time import sleep
+from typing import Any
 
 from eventide import Eventide, EventideConfig, Message, SQSQueueConfig
 
@@ -35,3 +36,8 @@ def handle_6_to_10(message: Message) -> None:
 @app.handler(lambda message: isinstance(message["body"], str))
 def handle_non_json(message: Message) -> None:
     sleep(uniform(0, len(message.body) / 3.0))
+
+
+@app.cron("* * * * * *")
+def cron_message() -> dict[str, Any]:
+    return {"value": "test"}

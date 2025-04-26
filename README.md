@@ -260,6 +260,85 @@ def on_error(msg: Message, exc: Exception):
 ```
 
 
+## Scheduled Messages with Cron
+
+Eventide supports lightweight message scheduling based on **cron expressions**, allowing you to inject messages into your queue at precise times, without needing external systems.
+
+Cron jobs are **defined using decorators** directly on the `app` instance.
+
+### Example
+
+```python
+from eventide import Eventide, EventideConfig
+
+app = Eventide(EventideConfig(...))
+
+@app.cron("* * * * * *")
+def heartbeat() -> dict[str, Any]:
+    return {"type": "heartbeat", "timestamp": "now"}
+```
+
+This will send a `heartbeat` message **every second**.
+
+---
+
+### How Cron Works
+
+- Cron jobs are scheduled independently of workers.
+- Each registered cron function generates a **single message body**.
+- The body is automatically pushed into the queue.
+- The cron process is meant to run **separately** from the worker process.
+
+This separation ensures that you can horizontally scale workers without duplicating scheduled messages.
+
+---
+
+### Cron Expression Format
+
+Eventide supports **6-field cron expressions** (`seconds minutes hours day month weekday`).
+
+| Field | Allowed Values |
+|:------|:---------------|
+| Seconds | 0–59 |
+| Minutes | 0–59 |
+| Hours | 0–23 |
+| Day of month | 1–31 |
+| Month | 1–12 |
+| Day of week | 0–6 (Sunday=0) |
+
+Examples:
+- `"* * * * * *"` — Every second
+- `"0 * * * * *"` — Every minute, at second 0
+- `"0 0 * * * *"` — Every day at midnight
+- `"*/5 * * * * *"` — Every 5 seconds
+
+---
+
+### Running the Cron Process
+
+You should run your cron scheduler **separately** from your workers:
+
+```bash
+eventide cron -a app:app
+```
+
+This will start the cron manager, which will evaluate and send messages based on your defined schedules.
+
+Workers can continue running normally:
+
+```bash
+eventide run -a app:app
+```
+
+---
+
+👉 Cron messages are treated exactly like any other messages once they are enqueued.
+👉 You can scale your workers independently from your scheduled jobs.
+👉 Cron functions are simple Python functions returning message bodies.
+
+---
+
+
 ## Practical Example: Order Processing System
 
 Here's a complete example of using Eventide to build an order processing system:
@@ -328,11 +407,6 @@ This example demonstrates how to:
 2. Use JMESPath expressions to route messages to the appropriate handlers
 3. Configure the application with the appropriate queue settings
 4. Run multiple workers for better throughput
-
-## Roadmap
-
-- [ ] Message scheduling (cron and one-off)
-- [ ] Comprehensive test suite
 
 ## License
 

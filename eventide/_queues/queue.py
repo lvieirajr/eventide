@@ -4,7 +4,7 @@ from multiprocessing.queues import Queue as MultiprocessingQueue
 from multiprocessing.sharedctypes import Synchronized
 from typing import Any, Callable, ClassVar, Generic, TypeVar
 
-from orjson import JSONDecodeError, loads
+from orjson import JSONDecodeError, JSONEncodeError, dumps, loads
 from pydantic import Field, NonNegativeInt, PositiveInt
 
 from .._handlers import Handler
@@ -61,6 +61,10 @@ class Queue(Generic[TMessage], ABC):
         raise NotImplementedError
 
     @abstractmethod
+    def send_message(self, body: Any) -> None:
+        raise NotImplementedError
+
+    @abstractmethod
     def pull_messages(self) -> list[TMessage]:
         raise NotImplementedError
 
@@ -96,6 +100,13 @@ class Queue(Generic[TMessage], ABC):
             return loads(body)
         except JSONDecodeError:
             return body
+
+    @staticmethod
+    def dump_message_body(body: Any) -> str:
+        try:
+            return dumps(body).decode("utf-8")
+        except JSONEncodeError:
+            return str(body)
 
     @property
     def empty(self) -> bool:

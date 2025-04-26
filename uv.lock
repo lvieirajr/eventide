@@ -200,6 +200,7 @@ dev = [
     { name = "pytest" },
     { name = "pytest-mock" },
     { name = "ruff" },
+    { name = "types-croniter" },
 ]
 
 [package.metadata]
@@ -225,6 +226,7 @@ dev = [
     { name = "pytest" },
     { name = "pytest-mock" },
     { name = "ruff" },
+    { name = "types-croniter" },
 ]
 
 [[package]]
@@ -1127,6 +1129,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/8b/6f/3991f0f1c7fcb2df31aef28e0594d8d54b05393a0e4e34c65e475c2a5d41/typer-0.15.2.tar.gz", hash = "sha256:ab2fab47533a813c49fe1f16b1a370fd5819099c00b119e0633df65f22144ba5", size = 100711, upload_time = "2025-02-27T19:17:34.807Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/7f/fc/5b29fea8cee020515ca82cc68e3b8e1e34bb19a3535ad854cac9257b414c/typer-0.15.2-py3-none-any.whl", hash = "sha256:46a499c6107d645a9c13f7ee46c5d5096cae6f5fc57dd11eccbbb9ae3e44ddfc", size = 45061, upload_time = "2025-02-27T19:17:32.111Z" },
+]
+
+[[package]]
+name = "types-croniter"
+version = "6.0.0.20250411"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/92/5a/837dd0f759b8df7c5ce28692f1b6d752035e5389098dd364784283b30a19/types_croniter-6.0.0.20250411.tar.gz", hash = "sha256:ee97025b7768f2cc556ef52a2f10c97c503c1634f372fd3e9683d8f7c960eeb7", size = 11722, upload_time = "2025-04-11T02:56:33.172Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/5d/e3/ec8880c9a7a484048457c5db3a340a949863f54043384f36eb0e4d9edc2f/types_croniter-6.0.0.20250411-py3-none-any.whl", hash = "sha256:4acdaccf4190017daa51699bd3110a0617c5df72459e62dea8b72549c62fad90", size = 9754, upload_time = "2025-04-11T02:56:32.317Z" },
 ]
 
 [[package]]

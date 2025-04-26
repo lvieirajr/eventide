@@ -1,5 +1,6 @@
 from random import choices, randint
 from string import ascii_letters, digits
+from typing import Any
 from uuid import uuid4
 
 from pydantic import NonNegativeInt, PositiveInt
@@ -26,6 +27,9 @@ class MockQueue(Queue[MockMessage]):
         return self.config.max_messages
 
     def initialize(self) -> None:
+        pass
+
+    def send_message(self, body: Any) -> None:
         pass
 
     def pull_messages(self) -> list[MockMessage]:
