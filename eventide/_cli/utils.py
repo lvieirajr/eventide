@@ -1,5 +1,6 @@
 from importlib import import_module
 from os import getcwd
+from pathlib import Path
 from sys import modules, path
 from typing import TYPE_CHECKING, cast
 
@@ -10,16 +11,21 @@ if TYPE_CHECKING:
 
 
 def resolve_app(app: str, reload: bool = False) -> "Eventide":
-    if getcwd() not in path:
-        path.insert(0, getcwd())
+    cwd = Path(getcwd()).resolve()
+
+    if str(cwd) not in path:
+        path.insert(0, str(cwd))
 
     module_name, *attrs = app.split(":", 1)
     if reload:
-        root = module_name.split(".")[0]
+        for loaded_module in list(modules):
+            try:
+                module_file = getattr(modules[loaded_module], "__file__", None)
 
-        for sys_module in list(modules):
-            if sys_module == root or sys_module.startswith(root + "."):
-                del modules[sys_module]
+                if module_file and cwd in Path(module_file).resolve().parents:
+                    del modules[loaded_module]
+            except (AttributeError, TypeError):
+                continue
 
     try:
         module = import_module(module_name)

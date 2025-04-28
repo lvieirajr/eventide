@@ -87,10 +87,10 @@ def send_email(message):
 
 ---
 
-## Scheduled Messages (Cron)
+## Scheduled Messages - Cron
 
 You can define functions decorated with `@app.cron` to schedule the sending of messages.
-Each [cron](https://crontab.guru/) function generates and returns the message body that Eventide will automatically enqueue to your configured queue provider at the scheduled time.
+Each [**cron**](https://crontab.guru/) function generates and returns the message body that Eventide will automatically enqueue to your configured queue provider at the scheduled time.
 
 Example:
 

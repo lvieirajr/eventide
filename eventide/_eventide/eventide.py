@@ -131,7 +131,6 @@ class Eventide:
 
         self.shutdown_event.clear()
         self.setup_signal_handlers()
-        self.autodiscover()
         self.queue_manager.start()
 
         while not self.shutdown_event.is_set():
