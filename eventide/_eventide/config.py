@@ -16,7 +16,7 @@ class EventideConfig(BaseSettings):
 
     queue: QueueConfig
 
-    min_pull_interval: PositiveFloat = 1.0
+    min_pull_interval: PositiveFloat = 1e-3
     max_pull_interval: PositiveFloat = 10.0
 
     concurrency: PositiveInt = 1

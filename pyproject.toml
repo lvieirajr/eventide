@@ -1,6 +1,6 @@
 [project]
 name = "eventide"
-version = "0.0.0a15"
+version = "0.0.0a16"
 description = "Fast and simple queue workers"
 readme = "README.md"
 license = "Apache-2.0"

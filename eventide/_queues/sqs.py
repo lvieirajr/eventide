@@ -1,6 +1,6 @@
 from typing import Any
 
-from pydantic import Field, PositiveInt
+from pydantic import Field, NonNegativeInt, PositiveInt
 
 from .queue import Message, Queue, QueueConfig
 
@@ -16,6 +16,7 @@ class SQSQueueConfig(QueueConfig):
     url: str
     max_number_of_messages: PositiveInt = Field(10, le=10)
     visibility_timeout: PositiveInt = Field(30, le=12 * 60 * 60)
+    wait_time_seconds: NonNegativeInt = Field(20, le=20)
 
 
 @Queue.register(SQSQueueConfig)
@@ -46,7 +47,7 @@ class SQSQueue(Queue[SQSMessage]):
         response = self.sqs_client.receive_message(
             QueueUrl=self.config.url,
             MaxNumberOfMessages=self.max_messages_per_pull,
-            WaitTimeSeconds=1,
+            WaitTimeSeconds=self.config.wait_time_seconds,
             VisibilityTimeout=self.config.visibility_timeout,
             AttributeNames=["All"],
             MessageAttributeNames=["All"],

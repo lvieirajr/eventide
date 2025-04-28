@@ -63,7 +63,7 @@ class CronManager:
                         self.queue_manager.queue.send_message(body=get_body())
                     except Exception as exception:
                         cron_logger.warning(
-                            f"Failed to send cron message for cron "
+                            f"Failed to send scheduled cron message from "
                             f"{get_body.__module__}.{get_body.__qualname__}: "
                             f"{exception}",
                             extra={
@@ -73,6 +73,15 @@ class CronManager:
                                 "traceback": "".join(
                                     format_tb(exception.__traceback__),
                                 ),
+                            },
+                        )
+                    else:
+                        cron_logger.info(
+                            f"Sent scheduled cron message from "
+                            f"{get_body.__module__}.{get_body.__qualname__}",
+                            extra={
+                                "cron": cron.get_message_body,
+                                "expression": cron.expression,
                             },
                         )
 
