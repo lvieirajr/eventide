@@ -155,6 +155,8 @@ class Queue(Generic[TMessage], ABC):
     def shutdown(self) -> None:
         self.message_buffer.close()
         self.message_buffer.cancel_join_thread()
+        self.message_buffer.join_thread()
 
         self.retry_buffer.close()
         self.retry_buffer.cancel_join_thread()
+        self.retry_buffer.join_thread()

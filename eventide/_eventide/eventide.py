@@ -1,4 +1,5 @@
 from importlib import import_module
+from logging import Logger
 from multiprocessing import get_context
 from multiprocessing.context import ForkContext
 from multiprocessing.synchronize import Event as MultiprocessingEvent
@@ -54,6 +55,10 @@ class Eventide:
             queue_manager=self.queue_manager,
         )
         self.cron_manager = CronManager(queue_manager=self.queue_manager)
+
+    @property
+    def logger(self) -> Logger:
+        return eventide_logger
 
     @property
     def handler(self) -> Callable[..., Callable[..., Handler]]:

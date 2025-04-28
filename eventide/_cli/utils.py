@@ -53,7 +53,7 @@ def run_with_reload(app: str, command: str) -> None:
                 echo("\nChanges detected, reloading...\n")
 
     observer = Observer()
-    observer.schedule(Handler(), ".", recursive=True)
+    observer.schedule(Handler(), str(getcwd()), recursive=True)
     observer.start()
 
     while True:

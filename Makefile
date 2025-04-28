@@ -112,17 +112,13 @@ pytest:  ##@Testing Runs the PyTest test suite
 # ======================================================================================
 # Examples
 # ======================================================================================
-.PHONY: mock
-mock:  ##@Examples Runs the Mock example
-	@eventide run -a examples.mock:app --reload
+.PHONY: sqs-cron
+sqs-cron:  ##@Examples Runs the SQS cron example
+	@eventide cron -a examples.sqs:app --reload
 
-.PHONY: sqs
-sqs:  ##@Examples Runs the SQS example
+.PHONY: sqs-worker
+sqs-worker:  ##@Examples Runs the SQS worker example
 	@eventide run -a examples.sqs:app --reload
-
-.PHONY: cloudflare
-cloudflare:  ##@Examples Runs the Cloudflare example
-	@eventide run -a examples.cloudflare:app --reload
 
 
 # ======================================================================================

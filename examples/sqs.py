@@ -11,33 +11,56 @@ basicConfig(level=INFO)
 app = Eventide(
     config=EventideConfig(
         queue=SQSQueueConfig(
-            region=environ.get("SQS_QUEUE_REGION"),
-            url=environ.get("SQS_QUEUE_URL"),
+            region=environ["SQS_QUEUE_REGION"],
+            url=environ["SQS_QUEUE_URL"],
             buffer_size=20,
         ),
-        concurrency=2,
-        timeout=2.0,
+        concurrency=4,
+        timeout=10.0,
         retry_for=[Exception],
-        retry_limit=2,
+        retry_limit=3,
     ),
 )
 
 
-@app.handler("length(body.value) >= `1` && length(body.value) <= `5`")
-def handle_1_to_5(message: Message) -> None:
-    sleep(uniform(0, len(message.body["value"]) / 3.0))
-
-
-@app.handler("length(body.value) >= `6` && length(body.value) <= `10`")
-def handle_6_to_10(message: Message) -> None:
-    sleep(uniform(0, len(message.body["value"]) / 3.0))
-
-
-@app.handler(lambda message: isinstance(message["body"], str))
-def handle_non_json(message: Message) -> None:
-    sleep(uniform(0, len(message.body) / 3.0))
-
-
 @app.cron("* * * * * *")
-def cron_message() -> dict[str, Any]:
-    return {"value": "test"}
+def create_order() -> dict[str, Any]:
+    return {
+        "event": "order_created",
+        "order_id": f"ORD-{int(uniform(1, 1e12))}",
+        "amount": round(uniform(1.0, 10000.0), 2),
+    }
+
+
+@app.cron("* * * * * */3")
+def cancel_order() -> dict[str, Any]:
+    return {
+        "event": "order_cancelled",
+        "order_id": f"ORD-{int(uniform(1, 1e12))}",
+    }
+
+
+@app.handler("body.event == `order_created`")
+def handle_new_order(message: Message) -> None:
+    order_id = message.body["order_id"]
+    amount = message.body["amount"]
+
+    app.logger.info(f"Processing order {order_id} for ${amount}")
+
+    processing_time = uniform(0.1, 3.0)
+    sleep(min(processing_time, 2.0))
+    if processing_time > 2.0:
+        raise TimeoutError("Payment gateway timed out")
+
+    app.logger.info(f"Order {order_id} processed")
+
+
+@app.handler("body.event == `order_cancelled`")
+def handle_cancel_order(message: Message) -> None:
+    order_id = message.body["order_id"]
+
+    app.logger.info(f"Processing refund for cancelled order: {order_id}")
+
+    sleep(uniform(0.1, 1.0))
+
+    app.logger.info(f"Refund for order {order_id} processed")

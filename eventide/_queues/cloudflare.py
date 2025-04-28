@@ -1,6 +1,3 @@
-from collections.abc import Generator
-from contextlib import contextmanager
-from logging import getLogger
 from typing import Any, Optional
 
 from pydantic import Field, PositiveInt
@@ -47,12 +44,11 @@ class CloudflareQueue(Queue[CloudflareMessage]):
         pass
 
     def pull_messages(self) -> list[CloudflareMessage]:
-        with self._suppress_httpx_info_logs():
-            response = self.cloudflare_client.queues.messages.pull(
-                self.config.queue_id,
-                account_id=self.config.account_id,
-                batch_size=self.max_messages_per_pull,
-            )
+        response = self.cloudflare_client.queues.messages.pull(
+            self.config.queue_id,
+            account_id=self.config.account_id,
+            batch_size=self.max_messages_per_pull,
+        )
 
         return [
             CloudflareMessage(
@@ -67,25 +63,8 @@ class CloudflareQueue(Queue[CloudflareMessage]):
         ]
 
     def ack_message(self, message: CloudflareMessage) -> None:
-        with self._suppress_httpx_info_logs():
-            self.cloudflare_client.queues.messages.ack(
-                self.config.queue_id,
-                account_id=self.config.account_id,
-                acks=[{"lease_id": message.lease_id}],
-            )
-
-    @contextmanager
-    def _suppress_httpx_info_logs(self) -> Generator[None, None, None]:
-        httpx_logger = getLogger("httpx")
-        httpcore_logger = getLogger("httpcore")
-        httpx_level = httpx_logger.level
-        httpcore_level = httpcore_logger.level
-
-        httpx_logger.setLevel("WARNING")
-        httpcore_logger.setLevel("WARNING")
-
-        try:
-            yield
-        finally:
-            httpx_logger.setLevel(httpx_level)
-            httpcore_logger.setLevel(httpcore_level)
+        self.cloudflare_client.queues.messages.ack(
+            self.config.queue_id,
+            account_id=self.config.account_id,
+            acks=[{"lease_id": message.lease_id}],
+        )
