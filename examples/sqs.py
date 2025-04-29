@@ -18,7 +18,7 @@ app = Eventide(
         concurrency=4,
         timeout=10.0,
         retry_for=[Exception],
-        retry_limit=3,
+        retry_limit=2,
     ),
 )
 

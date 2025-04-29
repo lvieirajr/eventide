@@ -1,5 +1,4 @@
-from time import time
-from traceback import format_tb
+from math import ceil
 from typing import TYPE_CHECKING
 
 from .logging import worker_logger
@@ -20,40 +19,35 @@ def handle_failure(
     queue: "Queue[Message]",
     exception: Exception,
 ) -> None:
-    handler = message.eventide_metadata.handler
-    attempt = message.eventide_metadata.attempt
+    handler, attempt = message.eventide_handler, message.eventide_attempt
 
-    exception_type = type(exception).__name__
     if should_retry(handler=handler, attempt=attempt, exception=exception):
         backoff = min(
             handler.retry_max_backoff,
             handler.retry_min_backoff * 2 ** (attempt - 1),
         )
 
-        message.eventide_metadata.attempt = attempt + 1
-        message.eventide_metadata.retry_at = time() + backoff
+        queue.retry_message(message=message, backoff=ceil(backoff))
 
-        queue.put_retry_message(message=message)
-
-        worker_logger.warning(
-            f"Message {message.id} handling failed with {exception_type}. Retrying in "
-            f"{backoff}s",
+        worker_logger.error(
+            f"Message {message.id} handling failed with {type(exception).__name__}. "
+            f"Retrying in {backoff}s",
+            exc_info=exception,
             extra={
                 "message_id": message.id,
                 "handler": handler.name,
                 "attempt": attempt,
-                "exception": str(exception),
-                "traceback": "".join(format_tb(exception.__traceback__)),
             },
         )
     else:
+        queue.dlq_message(message=message)
+
         worker_logger.error(
-            f"Message {message.id} handling failed with {exception_type}",
+            f"Message {message.id} handling failed with {type(exception).__name__}",
+            exc_info=exception,
             extra={
                 "message_id": message.id,
                 "handler": handler.name,
                 "attempt": attempt,
-                "exception": str(exception),
-                "traceback": "".join(format_tb(exception.__traceback__)),
             },
         )

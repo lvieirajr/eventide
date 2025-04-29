@@ -109,7 +109,6 @@ class Eventide:
         self.worker_manager.start()
 
         while not self.shutdown_event.is_set():
-            self.queue_manager.enqueue_retries()
             self.queue_manager.enqueue_messages()
 
             interval_start = time()

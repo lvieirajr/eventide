@@ -1,6 +1,4 @@
 from multiprocessing.context import ForkContext
-from queue import Empty
-from time import time
 
 from .._queues import Message, Queue
 from .._utils.logging import eventide_logger
@@ -39,44 +37,41 @@ class QueueManager:
         )
 
     def start(self) -> None:
-        self.queue = Queue.factory(config=self.config.queue, context=self.context)
+        self.queue = Queue.factory(
+            queue_id=1,
+            config=self.config.queue,
+            context=self.context,
+        )
         self._empty_pulls = 0
 
     def shutdown(self) -> None:
         if hasattr(self, "queue"):
             self.queue.shutdown()
 
-    def enqueue_retries(self) -> None:
-        messages = []
-
-        while True:
-            try:
-                messages.append(self.queue.get_retry_message())
-            except Empty:
-                break
-
-        for message in sorted(messages, key=lambda m: m.eventide_metadata.retry_at):
-            if message.eventide_metadata.retry_at <= time() and not self.queue.full:
-                self.queue.put_message(message)
-            else:
-                self.queue.put_retry_message(message)
-
     def enqueue_messages(self) -> None:
         if self.queue.should_pull:
             for message in self.queue.pull_messages():
+                matched_handlers = []
+
                 for handler in self.handler_manager.handlers:
                     if handler.matcher(message):
-                        message.eventide_metadata.handler = handler
-                        self.queue.put_message(message)
-                        break
+                        matched_handlers.append(handler)
 
-                if not message.eventide_metadata.handler:
+                if len(matched_handlers) == 1:
+                    message.eventide_handler = matched_handlers[0]
+                    self.queue.put_message(message)
+                elif len(matched_handlers) == 0:
                     eventide_logger.error(
                         f"No handler found for message {message.id}",
                         extra={"message_id": message.id},
                     )
+                else:
+                    eventide_logger.error(
+                        f"Multiple handlers found for message {message.id}",
+                        extra={
+                            "message_id": message.id,
+                            "handlers": [handler.name for handler in matched_handlers],
+                        },
+                    )
 
-        if self.queue.empty:
-            self._empty_pulls += 1
-        else:
-            self._empty_pulls = 0
+            self._empty_pulls = (self._empty_pulls + 1) if self.queue.empty else 0

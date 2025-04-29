@@ -52,59 +52,62 @@ class Worker:
 
     def run(self) -> None:
         while not self.shutdown_event.is_set():
-            message = self._get_message()
-
-            if message:
-                self._heartbeat(message)
-                self.on_message_received(message)
-
-                log_extra = {
-                    "message_id": message.id,
-                    "handler": message.eventide_metadata.handler.name,
-                    "attempt": message.eventide_metadata.attempt,
-                }
-
-                worker_logger.info(f"Message {message.id} received", extra=log_extra)
-
-                handler = message.eventide_metadata.handler
-                with ThreadPoolExecutor(max_workers=1) as executor:
-                    start = time()
-                    future = executor.submit(handler, message)
-
-                    try:
-                        future.result(timeout=handler.timeout)
-                    except Exception as exception:
-                        end = time()
-
-                        self._heartbeat(None)
-                        handle_failure(message, self.queue, exception)
-                        self.on_message_failure(message, exception)
-
-                        if (
-                            isinstance(exception, TimeoutError)
-                            and end - start >= handler.timeout
-                        ):
-                            break
-                    else:
-                        end = time()
-
-                        self._heartbeat(None)
-                        self.queue.ack_message(message)
-                        self.on_message_success(message)
-
-                        worker_logger.info(
-                            f"Message {message.id} handling succeeded in "
-                            f"{end - start}s",
-                            extra={**log_extra, "duration": end - start},
-                        )
-            else:
+            try:
+                message = self.queue.get_message()
+            except ShutDown:
+                break
+            except Empty:
                 sleep(0.1)
+                continue
 
-    def _get_message(self) -> Optional[Message]:
-        try:
-            return self.queue.get_message()
-        except (Empty, ShutDown):
-            return None
+            self._heartbeat(message)
+            self.on_message_received(message)
+
+            handler = message.eventide_handler
+            log_extra = {
+                "queue_id": self.queue.queue_id,
+                "worker_id": self.worker_id,
+                "message_id": message.id,
+                "handler": handler.name,
+                "attempt": message.eventide_attempt,
+            }
+
+            worker_logger.info(f"Message {message.id} received", extra=log_extra)
+
+            message_start_time = time()
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(handler, message)
+
+                try:
+                    future.result(timeout=handler.timeout)
+                except Exception as exception:
+                    message_timed_out = (
+                        isinstance(exception, TimeoutError)
+                        and time() - message_start_time >= handler.timeout
+                    )
+
+                    self._heartbeat(None)
+                    self.on_message_failure(message, exception)
+                    handle_failure(message, self.queue, exception)
+
+                    if message_timed_out:
+                        break
+                else:
+                    message_end_time = time()
+
+                    self._heartbeat(None)
+                    self.on_message_success(message)
+                    self.queue.ack_message(message)
+
+                    worker_logger.info(
+                        f"Message {message.id} handling succeeded in "
+                        f"{message_end_time - message_start_time}s",
+                        extra={
+                            **log_extra,
+                            "duration": message_end_time - message_start_time,
+                        },
+                    )
+                    break
 
     def _heartbeat(self, message: Optional[Message] = None) -> None:
         try:
