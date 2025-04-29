@@ -24,7 +24,6 @@ pip install eventide
 
 # Choose a queue provider:
 pip install eventide[sqs]        # AWS SQS support
-pip install eventide[cloudflare] # Cloudflare Queues support
 
 # Optional features:
 pip install eventide[cron]       # Cron scheduling
@@ -145,7 +144,6 @@ Available hooks:
 Eventide currently has built-in support for:
 
 - AWS SQS
-- Cloudflare Queues
 
 More providers will be added over time.
 You can also implement custom providers by extending the `Queue` base class.
